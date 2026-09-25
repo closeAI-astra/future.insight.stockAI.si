@@ -1,0 +1,460 @@
+<!doctype html>
+<html lang="ja" data-fs-theme="light">
+<head>
+  <meta name="robots" content="noindex, nofollow">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="AIで未来は読めるのかを検証し、金融取引の試行錯誤を支えるFuture Sightプロトタイプ。">
+  <title>Future Sight — Prototype</title>
+  <link rel="icon" type="image/png" href="assets/future-sight-logo.png">
+  <link rel="apple-touch-icon" href="assets/future-sight-logo.png">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="ambient ambient-a" aria-hidden="true"></div>
+  <div class="ambient ambient-b" aria-hidden="true"></div>
+  <div class="app-shell">
+    <aside class="sidebar" aria-label="メインナビゲーション">
+      <button class="brand" type="button" data-nav="home" aria-label="Future Sight ホームへ">
+        <span class="brand-mark" aria-hidden="true"><img src="assets/future-sight-logo.png" alt=""></span>
+        <span class="brand-copy"><strong>Future Sight</strong><small>AI × Financial Research</small></span>
+        <span class="prototype-badge">PROTOTYPE</span>
+      </button>
+
+      <nav class="nav-list">
+        <button class="nav-item active" type="button" data-nav="home"><span class="nav-icon">⌂</span><span>ホーム</span></button>
+        <button class="nav-item" type="button" data-nav="predictions"><span class="nav-icon">↗</span><span>企業予測</span></button>
+        <button class="nav-item" type="button" data-nav="stocks"><span class="nav-icon">☷</span><span>銘柄一覧</span></button>
+        <button class="nav-item" type="button" data-nav="chart"><span class="nav-icon">⌁</span><span>個別銘柄</span></button>
+        <button class="nav-item" type="button" data-nav="charts"><span class="nav-icon">⟋</span><span>チャート</span><em class="nav-new">NEW</em></button>
+        <button class="nav-item" type="button" data-nav="indices"><span class="nav-icon">◎</span><span>INDEX</span></button>
+        <button class="nav-item" type="button" data-nav="guidance"><span class="nav-icon">◐</span><span>決算予想</span><em class="nav-new">NEW</em></button>
+        <button class="nav-item" type="button" data-nav="research"><span class="nav-icon">✎</span><span>リサーチ</span><em class="nav-new">NEW</em></button>
+        <button class="nav-item" type="button" data-nav="comments"><span class="nav-icon">◌</span><span>AIコメント</span></button>
+        <button class="nav-item" type="button" data-nav="trades"><span class="nav-icon">◷</span><span>取引分析</span></button>
+        <button class="nav-item" type="button" data-nav="news"><span class="nav-icon">▤</span><span>ニュース</span></button>
+        <button class="nav-item" type="button" data-nav="models"><span class="nav-icon">⌬</span><span>モデル精度</span></button>
+        <button class="nav-item" type="button" data-nav="lab"><span class="nav-icon">◈</span><span>モデル内部</span><em class="nav-new">NEW</em></button>
+        <button class="nav-item" type="button" data-nav="data"><span class="nav-icon">▦</span><span>データ</span><em class="nav-new">NEW</em></button>
+        <button class="nav-item nav-uc" type="button" data-nav="construction"><span class="nav-icon">⚠</span><span>検証中</span><em class="nav-new uc">UC</em></button>
+        <button class="nav-item nav-uc" type="button" data-nav="experimental"><span class="nav-icon">⚗</span><span>実験AI</span><em class="nav-new uc">UC</em></button>
+        <button class="nav-item" type="button" data-nav="functions"><span class="nav-icon">⌘</span><span>Function</span></button>
+      </nav>
+
+      <div class="sidebar-foot">
+        <p>DATA · MODEL · AUDIT</p>
+        <span>予測の値だけでなく、<br>根拠と誤差まで一元管理。</span>
+      </div>
+    </aside>
+
+    <main class="main-area">
+      <header class="topbar">
+        <button class="mobile-menu" id="mobileMenu" type="button" aria-label="メニューを開く">☰</button>
+        <label class="global-search">
+          <span aria-hidden="true">⌕</span>
+          <input id="globalSearch" type="search" autocomplete="off" placeholder="銘柄・指数に移動(コード / 社名 / 日経平均…)" aria-label="銘柄・指数を検索して移動" role="combobox" aria-controls="symbolResults" aria-expanded="false"><div class="symbol-results" id="symbolResults" role="listbox" hidden></div>
+          <kbd>⌘ K</kbd>
+        </label>
+        <div class="top-actions">
+          <div class="theme-switch" role="group" aria-label="表示テーマ">
+            <button type="button" data-theme-value="light" class="active">Light</button>
+            <button type="button" data-theme-value="dark">Dark</button>
+            <button type="button" data-theme-value="prototype">Prototype</button>
+            <button type="button" data-theme-value="earth">Earth</button>
+          </div>
+          <span class="sync-status"><i></i><span id="headerAsOf">読込中</span></span>
+        </div>
+      </header>
+
+      <div class="page-stack">
+        <section class="page active" data-page="home" aria-labelledby="homeTitle">
+          <div class="page-heading compact-heading">
+            <div><p class="eyebrow">RESEARCH CONSOLE</p><h1 id="homeTitle">ホーム</h1></div>
+            <div class="data-note"><span>実データ</span><strong id="dataSummary">読み込み中</strong></div>
+          </div>
+
+          <section class="hero-panel hero-refined research-strip">
+            <div class="hero-copy">
+              <span class="question-chip">FUTURE SIGHT / PROTOTYPE</span>
+              <h2>検証中の予測を、すぐ比較。</h2>
+              <p>数値、レンジ、誤差、決算後の実績を同じ基準日で確認します。</p>
+              <div class="hero-status"><span><b id="heroPredictionCount">—</b>予測銘柄</span><span><b>3</b>数値モデル</span><span><b id="heroFeatureCount">—</b>特徴量</span></div>
+            </div>
+            <div class="research-strip-actions"><button type="button" class="primary-button" data-nav="predictions">予測を比較</button><button type="button" class="secondary-button" data-nav="functions">処理経路を見る</button></div>
+          </section>
+
+          <button type="button" class="uc-entry" data-nav="experimental"><strong>UNDER CONSTRUCTION</strong><span><b>実験AI(GNN・Transformer)</b>の出力も見られます。検証で予測力が確認できず、予測には使っていない参考データです。</span><em>実験AIを見る ›</em></button>
+
+          <div class="quick-row" aria-label="クイックカテゴリ">
+            <button type="button" data-quick="gain"><span>↗</span>値上がり予測</button>
+            <button type="button" data-quick="volume"><span>▥</span>出来高</button>
+            <button type="button" data-quick="dividend"><span>◉</span>高配当</button>
+            <button type="button" data-quick="value"><span>◇</span>割安</button>
+            <button type="button" data-quick="growth"><span>⌁</span>高成長</button>
+            <button type="button" data-quick="theme"><span>⌘</span>テーマ別</button>
+          </div>
+
+          <section class="panel update-strip update-times" id="homeTimes" aria-label="更新時刻" hidden></section>
+
+          <section class="panel update-strip" id="homeUpdates" aria-label="最新の更新"></section>
+
+          <section class="panel picks-panel"><div class="section-title"><div><span>検証候補 10</span><small>抽出条件: 予測対象の銘柄のうち、20営業日の期間VWAP予測(採用模型)が高い順の上位10。水準の予測は「今の株価のまま」に負けているため、相対的な強さの参考。推奨ではありません。</small></div><button class="text-button" data-nav="predictions" type="button">企業予測へ ›</button></div><div class="pick-strip" id="homePicks"></div></section>
+
+          <div class="feature-grid">
+            <article class="feature-card span-4 clickable" data-nav="predictions" tabindex="0">
+              <header><div><span class="card-icon">↗</span><h3>企業予測</h3><p>1〜252営業日の期間VWAP予測</p></div><button aria-label="企業予測へ">›</button></header>
+              <div class="rank-preview" id="homePredictions"><div class="skeleton-row"></div><div class="skeleton-row"></div><div class="skeleton-row"></div></div>
+            </article>
+            <article class="feature-card span-4 clickable" data-nav="stocks" tabindex="0">
+              <header><div><span class="card-icon">▤</span><h3>財務データ</h3><p>成長性・収益性・割安度</p></div><button aria-label="財務データへ">›</button></header>
+              <div class="mini-finance real" id="homeFinance" aria-hidden="true"></div>
+              <div class="mini-legend"><span><i class="blue"></i>売上高</span><span><i class="violet"></i>営業利益率</span><span id="homeFinanceName"></span></div>
+            </article>
+            <article class="feature-card span-4 clickable" data-nav="charts" tabindex="0">
+              <header><div><span class="card-icon">⌁</span><h3>高機能チャート</h3><p id="homeChartSub">売買履歴と予測VWAP</p></div><button aria-label="チャートへ">›</button></header>
+              <canvas id="homeMiniChart" class="mini-chart" aria-label="チャートプレビュー"></canvas>
+              <div class="mini-legend"><span><i class="blue"></i>日経平均</span><span><i class="violet"></i>20日予測(期間平均)</span><span><i class="cyan"></i>68%帯</span></div>
+            </article>
+            <article class="feature-card span-4 clickable" data-nav="comments" tabindex="0">
+              <header><div><span class="card-icon">◌</span><h3>AIコメント</h3><p>予測根拠と見通しの履歴</p></div><button aria-label="AIコメントへ">›</button></header>
+              <div class="comment-preview" id="homeComment"><p>読み込み中…</p></div>
+            </article>
+            <article class="feature-card span-4 clickable" data-nav="news" tabindex="0">
+              <header><div><span class="card-icon">▧</span><h3>ニュース</h3><p>決算・適時開示・関連情報</p></div><button aria-label="ニュースへ">›</button></header>
+              <div class="news-preview" id="homeNews"><div class="skeleton-row"></div><div class="skeleton-row"></div></div>
+            </article>
+            <article class="feature-card span-4 clickable" data-nav="models" tabindex="0">
+              <header><div><span class="card-icon">⌬</span><h3>モデル精度</h3><p>CURRENT・GBM・DNN比較</p></div><button aria-label="モデル精度へ">›</button></header>
+              <canvas id="homeModelChart" class="model-mini-chart" aria-label="モデル精度プレビュー"></canvas>
+              <div class="model-mini-labels"><span>20営業日の価格MAPE(低いほど良い)</span></div>
+            </article>
+            <article class="feature-card span-4 clickable" data-nav="lab" tabindex="0">
+              <header><div><span class="card-icon">◈</span><h3>モデル内部</h3><p>重要度・塔の開閉・検定・学習曲線</p></div><button aria-label="モデル内部へ">›</button></header>
+              <div class="lab-preview" id="homeLabPreview"><div class="skeleton-row"></div><div class="skeleton-row"></div></div>
+            </article>
+            <article class="feature-card span-4 clickable" data-nav="data" tabindex="0">
+              <header><div><span class="card-icon">▦</span><h3>データ</h3><p>取得元・件数・追加された項目</p></div><button aria-label="データへ">›</button></header>
+              <div class="lab-preview" id="homeDataPreview"><div class="skeleton-row"></div><div class="skeleton-row"></div></div>
+            </article>
+            <article class="feature-card span-4 clickable" data-nav="functions" tabindex="0">
+              <header><div><span class="card-icon">⌘</span><h3>Function</h3><p>データとモデルの接続状況</p></div><button aria-label="Functionへ">›</button></header>
+              <div class="function-preview"><span class="status-dot active"></span>収集 <b>→</b> PIT整合 <b>→</b> 特徴量 <b>→</b> 3モデル <b>→</b> 監査</div>
+            </article>
+          </div>
+        </section>
+
+        <section class="page" data-page="predictions" aria-labelledby="predTitle">
+          <div class="page-heading"><div><p class="eyebrow">FORECAST MATRIX</p><h1 id="predTitle">企業予測</h1><p>期間VWAPの予測を横断比較します。将来の値動きの道筋を示すものではありません。</p></div><div class="heading-stat"><span>対象</span><strong id="predictionCount">—</strong></div></div>
+          <div class="toolbar panel">
+            <label>期間<select id="predictionHorizon"><option value="1">1営業日</option><option value="3">3営業日</option><option value="5">5営業日</option><option value="10">10営業日</option><option value="20" selected>20営業日</option><option value="60">60営業日</option><option value="126">126営業日(半年)⚠検証中</option><option value="180">180営業日(3Q)⚠検証中</option><option value="252">252営業日(1年)⚠検証中</option></select></label>
+            <label>モデル<select id="predictionModel"><option value="ADOPTED">主役(採用模型)</option><option value="CURRENT">CURRENT</option><option value="GBM">GBM</option><option value="DNN">DNN</option><option value="CLAUDE">Claude の独自予測(未検証)</option><option value="ALL">3モデル比較</option></select></label>
+            <label>業種<select id="predictionIndustry"><option value="">すべて</option></select></label>
+            <label class="grow">絞り込み<input id="predictionSearch" type="search" placeholder="コード・会社名"></label>
+            <button class="secondary-button" id="predictionSort" type="button">売買代金順</button>
+          </div>
+          <div class="uc-banner slim" id="predUcNote" hidden></div>
+          <div class="table-panel panel"><table class="wide-table"><thead><tr><th>銘柄</th><th>売買代金順位<small>出来高順位</small></th><th>現在値</th><th>選択モデル予測</th><th>予測VWAP</th><th>Claude<small>独自予測・未検証</small></th><th>68%レンジ</th><th>CURRENT / GBM / DNN</th><th>個別方向一致</th><th>上抜け確率</th><th>R/R</th><th></th></tr></thead><tbody id="predictionRows"></tbody></table></div>
+        </section>
+
+        <section class="page" data-page="stocks" aria-labelledby="stocksTitle">
+          <div class="page-heading"><div><p class="eyebrow">DISCOVERY</p><h1 id="stocksTitle">銘柄一覧</h1><p>市場・業種・予測状態から対象銘柄を探します。</p></div></div>
+          <div class="market-tabs" role="tablist"><button class="active" data-market="">すべて</button><button data-market="Prime">Prime</button><button data-market="Standard">Standard</button><button data-market="Growth">Growth</button></div>
+          <div class="industry-grid" id="industryGrid"></div>
+          <div class="stock-controls"><strong id="stockResultCount">—</strong><label><input type="checkbox" id="forecastOnly" checked>予測可能銘柄のみ</label></div>
+          <div class="table-panel panel"><table class="wide-table"><thead><tr><th>売買代金順</th><th>銘柄</th><th>市場・業種</th><th>現在値（円）</th><th>売上高（百万円）</th><th>営業利益（百万円）</th><th>EPS（円）</th><th>1株配当（円）</th><th>20日VWAP予測</th></tr></thead><tbody id="stockGrid"></tbody></table></div>
+        </section>
+
+        <section class="page" data-page="chart" aria-labelledby="chartTitle">
+          <div class="page-heading chart-heading"><div><p class="eyebrow">STOCK · 個別銘柄ページ</p><h1 id="chartTitle">個別銘柄</h1><p id="chartSubhead">銘柄を選択してください</p></div><div class="stock-head-price" id="stockHeadPrice"></div></div>
+          <p class="stock-times" id="stockTimes"></p>
+          <nav class="stock-crumbs" id="stockCrumbs" aria-label="この銘柄のページ" hidden></nav>
+          <div id="stockOverview">
+          <div class="chart-section-head"><div><p class="eyebrow">CHART</p><h2>チャート</h2></div><button class="secondary-button" id="openChartsPage" type="button">チャート専用ページ ⤢</button></div>
+          <div class="tv-host" id="tvHostStock">
+          <div class="tv-shell" id="tvShell">
+            <div class="tv-topbar">
+              <div class="segmented chart-intervals" id="chartInterval" aria-label="時間足"><button class="active" data-interval="1d">日足</button><button data-interval="1w">週足</button><button data-interval="1mo">月足</button><button data-interval="1y">年足</button></div>
+              <span class="tv-sep" aria-hidden="true"></span>
+              <div class="tv-toggles" aria-label="表示する指標">
+                <label class="tv-chip"><input type="checkbox" id="toggleMa" checked><span>移動平均 5/25/75</span></label>
+                <label class="tv-chip"><input type="checkbox" id="toggleBb"><span>ボリンジャー</span></label>
+                <label class="tv-chip"><input type="checkbox" id="toggleVolume" checked><span>出来高</span></label>
+                <label class="tv-chip"><input type="checkbox" id="toggleProfile"><span>価格帯別出来高</span></label>
+                <label class="tv-chip"><input type="checkbox" id="toggleForecast" checked><span>AI予測</span></label>
+                <label class="tv-chip"><input type="checkbox" id="togglePast"><span>過去の予測</span></label>
+                <label class="tv-chip"><input type="checkbox" id="toggleTrades" checked><span>売買履歴</span></label>
+              </div>
+              <span class="tv-sep" aria-hidden="true"></span>
+              <label class="tv-select">予測<select id="tvHorizon" aria-label="予測の期限"></select></label>
+              <label class="tv-select">模型<select id="tvModel" aria-label="重ねる予測"></select></label>
+              <span class="tv-sep" aria-hidden="true"></span>
+              <label class="tv-select">サブチャート<select id="tvIndicator"><option value="macd">MACD</option><option value="rsi">RSI</option><option value="stoch">ストキャス</option><option value="none">なし</option></select></label>
+            </div>
+            <div class="tv-body">
+              <div class="tv-tools" role="toolbar" aria-label="描画ツール">
+                <button type="button" class="active" data-tv-tool="cursor" title="十字線(ドラッグで移動・ホイールで拡大縮小)">✛</button>
+                <button type="button" data-tv-tool="trend" title="トレンドライン(2点をクリック)">╱</button>
+                <button type="button" data-tv-tool="hline" title="水平線(1点をクリック)">―</button>
+                <button type="button" data-tv-tool="clear" title="この銘柄の描画を消去">⌫</button>
+              </div>
+              <div class="tv-panes">
+                <div class="tv-pane main-pane">
+                  <div class="tv-legend" id="chartLegend"></div>
+                  <canvas id="stockChart" aria-label="株価チャート(ローソク足・出来高・移動平均・AI予測)"></canvas>
+                  <div class="tv-nav" aria-label="表示範囲の操作"><button type="button" data-tv-nav="out" title="縮小">−</button><button type="button" data-tv-nav="in" title="拡大">＋</button><button type="button" data-tv-nav="left" title="過去へ">‹</button><button type="button" data-tv-nav="right" title="最新へ">›</button><button type="button" data-tv-nav="reset" title="表示をリセット">⟲</button></div>
+                </div>
+                <div class="tv-pane sub-pane">
+                  <div class="tv-legend sub"><span id="indicatorLegend"></span><span class="indicator-tabs"><button data-indicator="macd" class="active">MACD</button><button data-indicator="rsi">RSI</button><button data-indicator="stoch">Stoch</button><button data-indicator="none">×</button></span></div>
+                  <canvas id="indicatorChart" aria-label="テクニカル指標"></canvas>
+                </div>
+                <div class="tv-bottombar">
+                  <div class="tv-ranges" id="chartRange" aria-label="表示期間"><button data-range="1m">1ヶ月</button><button data-range="3m">3ヶ月</button><button class="active" data-range="6m">6ヶ月</button><button data-range="ytd">年初来</button><button data-range="1y">1年</button><button data-range="3y">3年</button><button data-range="5y">5年</button><button data-range="all">すべて</button></div>
+                  <span class="tv-bottom-info"><span id="tvClock"></span><span>分割調整済み</span></span>
+                </div>
+              </div>
+              <aside class="tv-side">
+                <section class="tv-watch"><header><div class="watch-mode" role="tablist" aria-label="一覧の種類"><button type="button" data-watch-mode="stock" class="active">銘柄</button><button type="button" data-watch-mode="index">指数</button></div><select id="watchSort" aria-label="並び順"><option value="rank">売買代金順</option><option value="change">騰落率順</option><option value="ai">AI 20日予測順</option></select></header><div class="watch-head"><span>銘柄</span><span>終値</span><span>前日比</span></div><div class="watch-list" id="watchList"></div></section>
+                <section class="tv-symbol" id="symbolCard"></section>
+                <section class="tv-comments" id="tvComments"><header><strong>AIコメント履歴</strong></header><div id="commentTimeline"></div></section>
+              </aside>
+            </div>
+          </div>
+          </div>
+          <div class="section-title stock-cards-head"><div><span>この銘柄の要点</span><small>カードを押すと、過去データや詳しい内訳のページへ移動します</small></div><em>OVERVIEW</em></div>
+          <div class="feature-grid stock-card-grid" id="stockCards"></div>
+          </div>
+          <div id="stockDetail" hidden>
+            <div data-stock-view="forecast" hidden>
+          <div class="stock-overview-grid stock-detail-content">
+            <section class="panel stock-snapshot" id="stockSnapshot"></section>
+            <section class="panel forecast-inspector"><div class="section-title"><span>AI予測</span><select id="forecastModel" aria-label="予測モデル"><option value="ADOPTED">模型・主役(採用)</option><option value="CURRENT">CURRENT</option><option value="GBM">GBM</option><option value="DNN">DNN</option><option value="CLAUDE">Claude の独自予測(未検証)</option><option value="NLG">予測の解説(3模型の中央値)</option></select></div><div class="horizon-tabs" id="forecastTabs"><button data-horizon="1">1日</button><button data-horizon="3">3日</button><button data-horizon="5">5日</button><button data-horizon="10">10日</button><button class="active" data-horizon="20">20日</button><button data-horizon="60">60日</button><button data-horizon="126" class="uc-tab" title="検証中(答え合わせ前)">半年⚠</button><button data-horizon="180" class="uc-tab" title="検証中(答え合わせ前)">3Q⚠</button><button data-horizon="252" class="uc-tab" title="検証中(答え合わせ前)">1年⚠</button></div><div id="forecastDetails"></div><p class="caution">予測値は期間VWAP。上抜け・下抜け確率は、予測期間中に現在値基準の上側・下側しきい値へ一度でも到達する推定確率です。両方に触れる経路があるため合計100%にはなりません。</p></section>
+            <section class="panel company-model-audit" id="companyModelAudit"></section>
+          </div>
+            </div>
+            <div data-stock-view="memo" hidden>
+          <section class="panel judgment-panel" id="judgmentPanel" aria-label="判断メモ"><div class="empty-state"><p>読み込み中…</p></div></section>
+            </div>
+            <div data-stock-view="company" hidden>
+          <div class="stock-detail-content">
+            <section class="panel broker-panel"><div class="broker-head"><div><p class="eyebrow">COMPANY DATA</p><h2 id="brokerTitle">企業情報</h2></div><div class="broker-tabs" id="brokerTabs" role="tablist"></div></div><div id="brokerBody"></div><p class="broker-note" id="brokerNote"></p></section>
+          </div>
+            </div>
+            <div data-stock-view="news" hidden>
+          <div class="stock-detail-content">
+            <section class="panel detail-card news-card"><div class="section-title"><span>関連ニュース</span><button class="text-button" type="button" data-nav="news">すべて ›</button></div><div id="stockNews"></div></section>
+          </div>
+            </div>
+            <div data-stock-view="earnings" hidden>
+          <div class="stock-detail-content">
+            <section class="panel earnings-panel"><div class="section-title"><div><span>決算検証</span><small>決算ごとの数値・発表後実績・保存済みGBMを分離</small></div><a id="earningsSource" class="text-button" target="_blank" rel="noopener noreferrer">決算データ元 ↗</a></div><div id="earningsHistory"></div></section>
+          </div>
+            </div>
+            <div data-stock-view="relations" hidden>
+          <div class="insight-grid two stock-detail-content">
+            <section class="panel relation-panel"><div class="section-title"><div><span>セクター・企業関係</span><small>GNNは実験系。予測根拠には未採用</small></div><em>NETWORK</em></div><div id="relationGraph"></div></section>
+            <section class="panel insight-panel"><div class="section-title"><div><span>開示ベースの関係</span><small>config/relations.json の事実。GNN重みではない</small></div><em>FACTS</em></div><div id="stockRelationFacts"></div></section>
+          </div>
+            </div>
+            <div data-stock-view="risk" hidden>
+          <div class="stock-detail-content">
+            <section class="panel optimizer-panel"><div class="section-title"><div><span>ポジション最適化</span><small>途中安値の過去実績と許容損失による検証用上限(予測ではない)</small></div><em>RISK BUDGET</em></div><div class="optimizer-form"><label>運用資金<input id="optimizerCapital" type="number" min="10000" step="10000" value="1000000"></label><label>1取引の許容損失<input id="optimizerRisk" type="number" min="0.1" max="10" step="0.1" value="1"><span>%</span></label></div><div id="optimizerResult"></div></section>
+          </div>
+            </div>
+            <div data-stock-view="model" hidden>
+          <div class="insight-grid two stock-detail-content">
+            <section class="panel insight-panel"><div class="section-title"><div><span>予測の読み筋</span><small id="contribNote">CURRENT(Ridge)の係数×標準化値</small></div><em>WHY</em></div><div id="stockContrib"></div></section>
+            <section class="panel insight-panel"><div class="section-title"><div><span>有報データ(EDINET)</span><small>9/23追加の項目を含む。提出翌日から利用</small></div><em>NEW DATA</em></div><div id="stockEdinet"></div></section>
+          </div>
+            </div>
+            <div data-stock-view="exp" hidden>
+          <section class="panel lab-section stock-detail-content" id="stockExp"></section>
+            </div>
+          </div>
+        </section>
+
+        <section class="page" data-page="charts" aria-labelledby="chartsTitle">
+          <div class="charts-bar">
+            <div class="charts-sym">
+              <button type="button" class="charts-step" id="chartsPrev" title="前の銘柄(一覧の並び順)" aria-label="前の銘柄">‹</button>
+              <div class="charts-search"><span aria-hidden="true">⌕</span><input id="chartsSearch" type="search" autocomplete="off" placeholder="銘柄・指数を切り替え(コード / 社名 / 日経平均…)" aria-label="チャートの銘柄を切り替え"><div class="symbol-results charts-results" id="chartsResults" role="listbox" hidden></div></div>
+              <button type="button" class="charts-step" id="chartsNext" title="次の銘柄(一覧の並び順)" aria-label="次の銘柄">›</button>
+            </div>
+            <div class="charts-title"><p class="eyebrow" id="chartsKind">CHART</p><h1 id="chartsTitle">チャート</h1><p id="chartsSub"></p></div>
+            <div class="stock-head-price" id="chartsPrice"></div>
+            <button type="button" class="secondary-button" id="chartsOpenPage">銘柄ページ ›</button>
+          </div>
+          <div class="tv-host tall" id="tvHostCharts"></div>
+          <p class="charts-note">ホイールで拡大縮小・ドラッグで過去へ。右のウォッチリスト(銘柄/指数)を押すか、上の検索・‹ › で切り替えます。売買履歴は「取引分析」で読み込んだCSV(端末内のみ)を重ねます。</p>
+        </section>
+        <section class="page" data-page="indices" aria-labelledby="indicesTitle">
+          <div class="page-heading"><div><p class="eyebrow">GLOBAL CONTEXT</p><h1 id="indicesTitle">INDEX</h1><p>価格・出来高、市場横断価格、VIX、信用残、ニュースを日付整合して、INDEX専用モデルを時系列バックテストします。</p></div><span class="audit-badge">WALK-FORWARD検証</span></div>
+          <div class="toolbar panel index-toolbar"><div><strong>予測期間</strong><small>期間中の平均価格</small></div><div class="horizon-tabs" id="indexHorizon"><button data-index-horizon="5">5日</button><button class="active" data-index-horizon="20">20日</button><button data-index-horizon="60">60日</button></div><p>同日の外部終値とニュースは1観測遅らせ、信用残は利用可能日から接続しています。</p></div>
+          <div class="index-grid" id="indexGrid"></div>
+          <section class="panel options-panel"><div class="section-title"><div><span>オプション需給</span><small>IV・スキュー・Put/Call・建玉集中帯</small></div><em id="optionsState">確認中</em></div><div id="optionsBody"></div></section>
+        </section>
+
+        <section class="page" data-page="trades" aria-labelledby="tradesTitle">
+          <div class="page-heading"><div><p class="eyebrow">TRADE REVIEW</p><h1 id="tradesTitle">取引分析</h1><p>楽天・SBI証券の取引履歴CSVを端末内だけで解析します。CSV原本をサーバーへ送信しません。</p></div><button class="privacy-pill" type="button">🔒 LOCAL ONLY</button></div>
+          <div class="trade-import panel" id="tradeDropZone">
+            <input id="tradeCsv" type="file" accept=".csv,text/csv" hidden>
+            <div class="upload-icon">⇧</div><h2>楽天・SBI証券CSVを読み込む</h2><p>ここへドロップ、またはファイルを選択</p><button class="primary-button" type="button" id="chooseCsv">CSVを選択</button><small>Shift_JIS / UTF-8・国内株 / 米国株・実現損益形式・重複排除に対応</small>
+          </div>
+          <div class="trade-kpis" id="tradeKpis"><article><span>読込件数</span><strong>0</strong></article><article><span>決済取引</span><strong>0</strong></article><article><span>勝率</span><strong>—</strong></article><article><span>平均保有日数</span><strong>—</strong></article></div>
+          <div class="panel trade-list-panel"><div class="section-title"><span>取引履歴</span><button class="text-button" id="clearTrades" type="button">端末内データを削除</button></div><div id="tradeEmpty" class="empty-state"><strong>まだ取引履歴がありません</strong><p>CSVを読み込むと、該当銘柄のチャートにB／Sマーカーと接続線を描画します。</p></div><div class="trade-list" id="tradeList"></div></div>
+        </section>
+
+        <section class="page" data-page="news" aria-labelledby="newsTitle">
+          <div class="page-heading"><div><p class="eyebrow">EVENT STREAM</p><h1 id="newsTitle">ニュース</h1><p>決算・適時開示・関連ニュースを時系列で確認します。</p></div></div>
+          <div class="toolbar panel"><label class="grow">検索<input id="newsSearch" type="search" placeholder="銘柄コード・見出し・情報源"></label><label>表示<select id="newsQuality"><option value="0">すべて</option><option value="3">一次・高品質</option></select></label></div>
+          <div class="news-list" id="newsList"></div>
+        </section>
+
+        <section class="page" data-page="models" aria-labelledby="modelsTitle">
+          <div class="page-heading"><div><p class="eyebrow">MODEL AUDIT</p><h1 id="modelsTitle">モデル精度</h1><p>予測の良し悪しを、誤差・方向・順位の複数指標で検証します。</p></div><span class="audit-badge">検証優先</span></div>
+          <div class="model-kpis" id="modelKpis"></div>
+          <div class="model-grid">
+            <section class="panel model-chart-panel"><div class="section-title"><div><span id="modelComparisonTitle">20営業日後の期間VWAP予測誤差</span><small>モデル全体の検証値</small></div><div class="horizon-tabs model-horizon-tabs" id="modelHorizon"><button data-model-horizon="5">5日</button><button class="active" data-model-horizon="20">20日</button><button data-model-horizon="60">60日</button></div></div><canvas id="modelChart"></canvas></section>
+            <section class="panel metric-guide"><div class="section-title"><span>指標の読み方</span><em>NO SINGLE SCORE</em></div><dl><div><dt>MAPE</dt><dd>価格予測の平均的な割合誤差。低いほど良い。</dd></div><div><dt>方向一致率</dt><dd>上昇・下落の向きが一致した割合。</dd></div><div><dt>Rank IC</dt><dd>銘柄の予測順位と実績順位の相関。高いほど良い。</dd></div><div><dt>Brier</dt><dd>確率予測の誤差。低いほど良い。</dd></div></dl></section>
+          </div>
+          <div class="table-panel panel"><table><thead><tr><th>モデル</th><th>期間</th><th>標本数</th><th>MAPE</th><th>方向一致率</th><th>Rank IC</th><th>Brier</th><th>Bias</th></tr></thead><tbody id="modelRows"></tbody></table></div>
+          <section class="panel lab-section" id="relPanel"><div class="section-title"><div><span>水準の当たり ― 「今の株価のまま」との比較</span><small id="relNote">期間VWAPの予測誤差(MAE)を、素朴予測(騰落0)と比べる。スキル = 1 − MAE(モデル)/MAE(素朴)。0以下は素朴予測に負け</small></div><em>VS NAIVE</em></div><div class="table-panel inner"><table><thead><tr><th>期限</th><th>模型</th><th>日数</th><th>MAE</th><th>MAE 素朴</th><th>スキル</th><th>t_NW</th><th>判定</th><th>順位IC</th><th>t_NW</th></tr></thead><tbody id="relRows"></tbody></table></div><p class="lab-foot" id="relFoot"></p></section>
+          <section class="panel lab-section"><div class="section-title"><div><span>地合い別の得意・不得意</span><small id="relRegimeNote">予測日のTOPIXで3区分。予測日が60日未満の区分は判定しない</small></div><em>REGIME</em></div><div class="table-panel inner"><table><thead id="relRegimeHead"></thead><tbody id="relRegime"></tbody></table></div></section>
+          <section class="panel lab-section"><div class="section-title"><div><span>予測区間の実測包含率</span><small>名目(68%・90%)と実測を並べる。区間は保証ではない</small></div><em>COVERAGE</em></div><div class="table-panel inner"><table><thead><tr><th>期限</th><th>出所</th><th>68% 実測</th><th>90% 実測</th><th>件数</th></tr></thead><tbody id="relCov"></tbody></table></div></section>
+          <section class="panel lab-section"><div class="section-title"><div><span>検証ユニバースの偏り</span><small>いまの選定銘柄で過去を検証しているため、成績は良く見える方向に偏る</small></div><em>SELECTION BIAS</em></div><div id="relUniverse"></div></section>
+        </section>
+
+
+        <section class="page" data-page="lab" aria-labelledby="labTitle">
+          <div class="page-heading"><div><p class="eyebrow">MODEL INTERNALS</p><h1 id="labTitle">モデル内部</h1><p>保存済みの学習済みモデル(state/models.pkl)と検証ファイルから、予測がどう作られたかを読み出します。予測の再計算はしていません。</p></div><span class="audit-badge" id="labBadge">読込中</span></div>
+          <div class="lab-notice" id="labNotice" hidden></div>
+          <div class="model-kpis lab-kpis" id="labKpis"></div>
+
+          <section class="panel lab-section"><div class="section-title"><div><span>今日までの更新ログ</span><small>stockAI 側で行った変更と検証結果。採否の判定と注意点を併記</small></div><em>CHANGELOG</em></div><div class="changelog-filter" id="changelogFilter"></div><div class="changelog" id="labChangelog"></div></section>
+
+          <div class="toolbar panel lab-toolbar"><div><strong>予測期限</strong><small>以下のパネルはこの期限の保存モデルを表示</small></div><div class="horizon-tabs" id="labHorizon"><button data-lab-horizon="1">1日</button><button data-lab-horizon="3">3日</button><button data-lab-horizon="5">5日</button><button data-lab-horizon="10">10日</button><button class="active" data-lab-horizon="20">20日</button><button data-lab-horizon="60">60日</button></div></div>
+
+          <section class="panel lab-section"><div class="section-title"><div><span>予測ができるまで</span><small>同じPIT整合パネルから3モデルを独立に学習し、区間は分位点GBM+コンフォーマル補正</small></div><em>PIPELINE</em></div><div class="lab-pipeline" id="labPipeline"></div></section>
+
+          <section class="panel lab-section"><div class="section-title"><div><span>特徴量の塔 × モデル</span><small>数値=そのモデルがその塔に置いている比重。「閉」=保存モデルがその塔の列を使っていない</small></div><em>TOWERS</em></div><div class="table-panel inner"><table class="gate-table"><thead><tr><th>塔</th><th>列数</th><th>CURRENT<small>|係数|比</small></th><th>GBM<small>分割ゲイン比</small></th><th>DNN<small>融合層重み比</small></th><th>直近の検証</th></tr></thead><tbody id="labGates"></tbody></table></div><p class="lab-foot" id="labGateFoot"></p></section>
+
+          <div class="lab-grid even">
+            <section class="panel lab-section"><div class="section-title"><div><span>GBMが重く見ている特徴量</span><small>300本の木の分割ゲイン合計に占める割合(上位15)</small></div><em>LIGHTGBM</em></div><div class="bar-list" id="labGbmTop"></div></section>
+            <section class="panel lab-section"><div class="section-title"><div><span>CURRENTの係数</span><small>標準化後のRidge係数(上位15)。右=上昇方向、左=下落方向</small></div><em>RIDGE</em></div><div class="bar-list diverging" id="labRidgeTop"></div></section>
+          </div>
+
+          <div class="lab-grid even">
+            <section class="panel lab-section"><div class="section-title"><div><span>DNNの学習曲線</span><small>エポックごとの訓練損失(標準化した目的変数のMSE)</small></div><em>TRAINING</em></div><canvas id="labLossChart" class="lab-canvas" aria-label="DNN学習曲線"></canvas><div class="lab-dnn-meta" id="labDnnMeta"></div></section>
+            <section class="panel lab-section"><div class="section-title"><div><span>本番の前向き実績</span><small>日次運用で答えが確定した予測だけの成績(まだ短期のみ)</small></div><em>LIVE</em></div><div id="labForward"></div></section>
+          </div>
+
+          <section class="panel lab-section"><div class="section-title"><div><span>モデル選択の検定</span><small>日次断面Rank ICを日付で対応させ、Newey-Westで自己相関を補正。|t_NW| ≥ 2 で有意</small></div><em>PAIRED TEST</em></div><div class="table-panel inner"><table><thead><tr><th>期限</th><th>日数</th><th>IC CURRENT</th><th>IC GBM</th><th>GBM−CURRENT</th><th>t_NW</th><th>判定</th><th>IC DNN</th><th>DNN−CURRENT</th><th>t_NW</th><th>判定</th></tr></thead><tbody id="labChoice"></tbody></table></div><p class="lab-foot">バックテスト(2022〜2026、固定400銘柄。毎週日曜に今の特徴量構成で作り直す)の保存済み予測による判定。本番のモデル選択は本番で確定した実績だけを見るため、この結果はまだ本番予測へ自動反映されていません。</p></section>
+
+          <div class="lab-grid">
+            <section class="panel lab-section"><div class="section-title"><div><span id="labIcTitle">日次ICの推移</span><small>日次断面Rank ICの60営業日移動平均。0より上なら予測順位が実績順位と同じ向き</small></div><em>DAILY IC</em></div><div class="chart-legend lab-legend" id="labIcLegend"></div><canvas id="labIcChart" class="lab-canvas tall" aria-label="日次IC推移"></canvas></section>
+            <section class="panel lab-section"><div class="section-title"><div><span>年別の平均IC</span><small>年ごとの日次ICの平均。色が濃いほど高い</small></div><em>BY YEAR</em></div><div class="table-panel inner"><table class="year-table"><thead id="labYearHead"></thead><tbody id="labYear"></tbody></table></div></section>
+          </div>
+
+          <section class="panel lab-section"><div class="section-title"><div><span>塔の追加検証(アブレーション)</span><small>その塔を入れた場合と外した場合の日次ICの差。A=全期間、B=その塔のデータがある行だけ</small></div><div class="ablation-controls"><select id="ablationScope" aria-label="期限で絞り込み"><option value="h">選択中の期限のみ</option><option value="all">すべての期限</option></select><select id="ablationTower" aria-label="塔で絞り込み"><option value="">すべての塔</option></select></div></div><div class="table-panel inner scroll-box"><table><thead><tr><th>塔</th><th>モデル</th><th>期限</th><th>条件</th><th>日数</th><th>ICの差</th><th>t_NW</th><th>改善日の割合</th><th>判定</th><th>実施</th></tr></thead><tbody id="labAblation"></tbody></table></div></section>
+
+          <!-- 2026-09-24: ポートフォリオ検証は削除(VWAP比を保有リターンとして複利計算・ベンチマークが過去20日・共分散と期待リターンの期間不一致で、数値が無効だったため) -->
+        </section>
+
+        <section class="page" data-page="construction" aria-labelledby="ucTitle">
+          <div class="page-heading"><div><p class="eyebrow">UNDER CONSTRUCTION</p><h1 id="ucTitle">検証中</h1><p>裏で動いているが、まだ採用していないもの(シャドー運用・答え合わせ待ち・検証キュー・データ蓄積)をまとめています。</p></div><span class="audit-badge" id="ucBadge">読込中</span></div>
+          <div class="uc-banner" id="ucBanner"><strong>UNDER CONSTRUCTION</strong><span>このページの数値は採用前です。売買判断の根拠に使わないでください。</span></div>
+          <div class="uc-cards" id="ucCards"></div>
+          <button type="button" class="uc-entry" data-nav="experimental"><strong>UNDER CONSTRUCTION</strong><span><b>実験AI(GNN・Transformer)</b>の検証データ(日次IC・注意重み・フォールド別成績)はこちら。検証で予測力が確認できず、予測には使っていない参考データです。</span><em>実験AIを見る ›</em></button>
+          <section class="panel lab-section"><div class="section-title"><div><span>期限ごとの答え合わせ</span><small>本番で毎日記録している予測のうち、実績が確定した件数。日付は土日だけを除いた目安(祝日ぶん遅れる)</small></div><em>MATURITY</em></div><div class="table-panel inner"><table><thead><tr><th>期限</th><th>予測開始</th><th>予測日数</th><th>確定日数</th><th>採用模型</th><th>最初の答え合わせ</th><th>模型の乗り換え判定が可能</th><th>決算比重wが動ける</th></tr></thead><tbody id="ucLong"></tbody></table></div></section>
+          <section class="panel lab-section"><div class="section-title"><div><span>塔 × 期限 × 模型の開閉</span><small>●=予測に使用 ◐=CURRENTでは閉じているがGBM/DNNで裏で使用 ○=どの模型でも閉。scripts/run_daily.py の現在の設定</small></div><em>GATES</em></div><div class="table-panel inner scroll-box"><table class="uc-gate"><thead id="ucGateHead"></thead><tbody id="ucGate"></tbody></table></div><p class="lab-foot">決算はCURRENTでは比重w(既定: 60日だけ0.3)で混ぜるため、60日以外は「裏で記録だけ」の扱い。ゲート表に載っていない塔(信用残・ニュース件数・BERT)は未検証のまま全期限で開いている。</p></section>
+          <section class="panel lab-section"><div class="section-title"><div><span>決算塔シャドー</span><small>価格だけの予測と決算込みの予測を毎日両方記録し、答えが出た日ごとに断面ICを比べる</small></div><em>SHADOW</em></div><div class="table-panel inner"><table><thead><tr><th>期限</th><th>記録開始</th><th>記録日数</th><th>採点済み日数</th><th>IC 価格のみ</th><th>IC 決算込み</th><th>差</th><th>wが動くまで</th></tr></thead><tbody id="ucEarn"></tbody></table></div></section>
+          <section class="panel lab-section"><div class="section-title"><div><span>検証キュー</span><small id="ucQueueNote">scripts/run_extra_towers_validation.ps1</small></div><em>QUEUE</em></div><div class="uc-queue" id="ucQueue"></div></section>
+          <section class="panel lab-section"><div class="section-title"><div><span>判定待ちの塔のアブレーション(t_NW)</span><small>A=全期間 / B=塔のデータがある行だけ / C=業種中立。|t|≥2 を太字。乱数対照(競合シャッフル)と並べて読む</small></div><em>PENDING</em></div><div class="table-panel inner scroll-box"><table class="uc-abl"><thead id="ucAblHead"></thead><tbody id="ucAbl"></tbody></table></div><p class="lab-foot">1年(252日)は5年分のデータでも独立な標本が4〜5本しかなく、乱数対照でも t=3.4 が出ている。長期の t は参考扱い。</p></section>
+          <section class="panel lab-section"><div class="section-title"><div><span>前向きに貯めているデータ</span><small>観測した日より前には使わない(PIT)ので、効くかどうかは貯まってから判定する</small></div><em>ACCUMULATING</em></div><div class="table-panel inner"><table><thead><tr><th>データ</th><th>行数</th><th>銘柄数</th><th>期間</th><th>更新</th><th>メモ</th></tr></thead><tbody id="ucAcc"></tbody></table></div></section>
+        </section>
+
+        <section class="page" data-page="experimental" aria-labelledby="expTitle">
+          <div class="page-heading"><div><p class="eyebrow">UNDER CONSTRUCTION · EXPERIMENTAL</p><h1 id="expTitle">実験AI</h1><p>GNN(企業関係グラフ)・Transformer など、試したものの予測力が確認できず、本番の予測に使っていないモデルの出力です。「裏で何が出ているか」を確認するためのページです。</p></div><span class="audit-badge" id="expBadge">読込中</span></div>
+          <div class="uc-banner" id="expBanner"><strong>UNDER CONSTRUCTION</strong><span>このページの数値は不採用モデルのものです。売買判断の根拠に使わないでください。</span></div>
+          <section class="panel exp-guide"><h2>このページの読み方</h2><ol>
+            <li><b>何を当てようとしたか</b> ― 個々の株価そのものではなく「20営業日後までに、対象銘柄の中でどれが相対的に上がるか」という<b>順位</b>。</li>
+            <li><b>IC(情報係数)</b> ― 予測の順位と実際の順位がどれだけ揃ったか。+1 で完全一致、0 で無関係、マイナスは逆。株の世界では毎日 +0.03〜0.05 を安定して出せれば十分に有用な水準。</li>
+            <li><b>対照実験</b> ― 取引関係の線をでたらめに張り替えたGNNも同じ条件で学習させた。本物の関係で学習したGNNが対照より良くなければ、「取引関係の情報が効いた」とは言えない。</li>
+            <li><b>t値</b> ― 平均の差が偶然で説明できるか。|t| が2以上でようやく「偶然ではなさそう」。GNN・Transformer はどちらも届かなかったので不採用。</li>
+          </ol></section>
+          <div id="expBody"><div class="empty-state"><p>読み込み中…</p></div></div>
+        </section>
+
+        <section class="page" data-page="data" aria-labelledby="dataTitle">
+          <div class="page-heading"><div><p class="eyebrow">DATA INVENTORY</p><h1 id="dataTitle">データ</h1><p>予測に入っているデータの取得元・件数・期間・更新時刻と、今回追加された項目の埋まり具合を確認します。</p></div><span class="audit-badge" id="dataBadge">読込中</span></div>
+          <div class="model-kpis" id="dataKpis"></div>
+          <div class="source-grid" id="dataSources"></div>
+          <section class="panel lab-section"><div class="section-title"><div><span>EDINET(有報XBRL)の取得項目</span><small id="edinetSummary">—</small></div><em id="edinetItemCount">ITEMS</em></div><div class="table-panel inner"><table class="edinet-table"><thead><tr><th>項目</th><th>出所</th><th>追加</th><th>行数</th><th>銘柄数</th><th>固定400銘柄の被覆</th><th>会計基準</th></tr></thead><tbody id="dataEdinet"></tbody></table></div><p class="lab-foot">被覆が0%の項目は、要素名が書類と合っていない可能性があります(取得処理の確認待ち)。経常利益はIFRSに無い概念なので、IFRS採用会社での欠損は正常です。</p></section>
+          <section class="panel lab-section"><div class="section-title"><div><span>自然言語処理・自然言語生成の出力</span><small>サイトの他画面に出ていない中間データ</small></div><em>NLP / NLG</em></div><div class="nlp-tabs broker-seg wide" id="nlpTabs"><button type="button" data-nlp="evidence" class="active">根拠ファイル(NLGの入力)</button><button type="button" data-nlp="long">長く効くニュース</button><button type="button" data-nlp="short">短命ニュース</button><button type="button" data-nlp="cats">分類の内訳</button><button type="button" data-nlp="shadow">決算塔シャドーIC</button><button type="button" data-nlp="pack">レポート根拠パック</button></div><div id="nlpBody"></div></section>
+          <div class="lab-grid even">
+            <section class="panel lab-section"><div class="section-title"><div><span>ニュースの日次件数</span><small>公開日ベース(直近30日)</small></div><em>NEWS FLOW</em></div><canvas id="dataNewsChart" class="lab-canvas" aria-label="ニュース日次件数"></canvas></section>
+            <section class="panel lab-section"><div class="section-title"><div><span>ニュース取得ログ</span><small>取得のたびに保存件数を記録</small></div><em>FETCH LOG</em></div><div class="table-panel inner"><table class="compact-table"><thead><tr><th>取得時刻</th><th>その回の件数</th></tr></thead><tbody id="dataFetchLog"></tbody></table></div></section>
+          </div>
+        </section>
+
+
+        <section class="page" data-page="index" aria-labelledby="indexTitle">
+          <div class="index-switch" id="indexSwitch" role="tablist" aria-label="指数を切り替え"></div>
+          <div class="page-heading chart-heading"><div><p class="eyebrow" id="indexKind">INDEX</p><h1 id="indexTitle">指数</h1><p id="indexSubhead"></p></div><div class="stock-head-price" id="indexHeadPrice"></div></div>
+          <div class="chart-section-head"><div><p class="eyebrow">CHART</p><h2>チャートとAI予測</h2></div><button class="secondary-button" id="indexOpenCharts" type="button">チャート専用ページ ⤢</button></div>
+          <div class="tv-host" id="tvHostIndex"></div>
+          <div class="model-kpis index-kpis" id="indexKpis"></div>
+          <div class="lab-grid">
+            <section class="panel lab-section index-ai-panel"><div class="section-title"><div><span>AI予測(指数専用モデル・模型別)</span><small id="indexAiNote">期間中の平均価格の予測。カードを押すとチャートに重ねる模型が切り替わります</small></div><em>FORECAST</em></div><div id="indexForecast"></div></section>
+            <section class="panel lab-section"><div class="section-title"><div><span>テクニカル・統計</span><small>日足ベース</small></div><em>STATS</em></div><div id="indexStats"></div></section>
+          </div>
+          <section class="panel lab-section"><div class="section-title"><div><span>期限 × 模型の予測と検証成績</span><small>拡大型の時系列分割(最後の4ブロック×100日)。採用=検証MAEが最小の模型</small></div><em>WALK-FORWARD</em></div><div id="indexForecastTable"></div></section>
+          <section class="panel lab-section" id="indexOptionsSection"><div class="section-title"><div><span>ボラティリティ・オプション</span><small id="indexOptionsNote">IV・期間構造・建玉</small></div><em>OPTIONS</em></div><div id="indexOptions"></div></section>
+          <section class="panel lab-section" id="indexBreadthSection"><div class="section-title"><div><span>東証の地合い・需給</span><small>固定400銘柄の集計</small></div><em>BREADTH & FLOWS</em></div><div id="indexBreadth"></div></section>
+          <div class="lab-grid even">
+            <section class="panel lab-section"><div class="section-title"><div><span>相関(日次リターン)</span><small>米国系は時差があるため同日の相関は低めに出る</small></div><em>CORRELATION</em></div><div id="indexCorr"></div></section>
+            <section class="panel lab-section"><div class="section-title"><div><span>月別の季節性</span><small>2020年以降の月次騰落の平均と勝率</small></div><em>SEASONALITY</em></div><canvas id="indexSeason" class="lab-canvas" aria-label="月別の季節性"></canvas></section>
+          </div>
+          <section class="panel lab-section"><div class="section-title"><div><span>関連するリサーチ</span><small>Claude が根拠データから作成</small></div><em>RESEARCH</em></div><div id="indexReports"></div></section>
+        </section>
+
+        <section class="page" data-page="guidance" aria-labelledby="guidanceTitle">
+          <div class="page-heading"><div><p class="eyebrow">GUIDANCE SURPRISE · 実験</p><h1 id="guidanceTitle">決算予想(会社予想を上回るか)</h1><p>会社が出している通期の営業利益予想を、期末の実績が上回る確率。四半期の進捗・予想の修正・株価の動きから、過去2年の決算で学習した GBM が出す。</p></div><span class="audit-badge" id="guidanceBadge">—</span></div>
+          <div class="model-kpis" id="guidanceKpis"></div>
+          <div class="lab-grid even">
+            <section class="panel lab-section"><div class="section-title"><div><span>検証(ウォークフォワード)</span><small>その時点で答えが出ていた決算だけで学習し、翌月以降の開示を予測</small></div><em>BACKTEST</em></div><div id="guidanceEval"></div></section>
+            <section class="panel lab-section"><div class="section-title"><div><span>確率の当たり方</span><small>予測確率を5段階に分けたときの実際の上振れ率</small></div><em>CALIBRATION</em></div><div id="guidanceCalib"></div></section>
+          </div>
+          <section class="panel lab-section"><div class="section-title"><div><span>有意性の検定</span><small>当たっているのは偶然ではないか・GBM は単純な規則より良いか(会社単位ブートストラップ・月内並べ替え検定)</small></div><em>SIGNIFICANCE</em></div><div id="guidanceSig"></div></section>
+          <section class="panel lab-section"><div class="section-title"><div><span>記録と答え合わせ(逐次学習)</span><small>stockAI の日次実行で毎日予測を記録し、本決算が出たら答えを付けて学習データに足す</small></div><em>LIVE</em></div><div id="guidanceLive"></div></section>
+          <section class="panel lab-section"><div class="section-title"><div><span>現在の予測</span><small id="guidanceNowNote"></small></div><div class="ablation-controls"><select id="guidanceQ" aria-label="時点"><option value="">すべての時点</option><option value="0">期初予想のみ</option><option value="1">1Q 開示後</option><option value="2">2Q 開示後</option><option value="3">3Q 開示後</option></select><input id="guidanceSearch" type="search" placeholder="コード・社名"></div></div><div class="broker-table-wrap"><table class="broker-table guidance-table"><thead><tr><th>銘柄</th><th>上振れ確率</th><th>Claude の補正</th><th>時点</th><th>会社予想(営業利益)</th><th>期初予想から</th><th>進捗(今年)</th><th>進捗(去年の同時点)</th><th>累計の前年比</th><th>残りに必要な伸び</th><th>60日騰落</th></tr></thead><tbody id="guidanceRows"></tbody></table></div><p class="lab-foot">進捗 = 今期の累計営業利益 ÷ 通期予想。去年の同時点と比べて速ければ上振れしやすい(季節性を除くため去年と比較)。「残りに必要な伸び」= 予想を達成するのに、残りの四半期が去年の同期比で何%伸びる必要があるか。単位は百万円。データ: 株探(最新の予想・四半期実績)、J-Quants(期初予想・学習用の履歴)。</p></section>
+        </section>
+
+        <section class="page" data-page="research" aria-labelledby="researchTitle">
+          <div class="page-heading"><div><p class="eyebrow">RESEARCH DESK</p><h1 id="researchTitle">リサーチ</h1><p>stockAI の数値(予測・検証・需給・ボラティリティ)を根拠に、Claude が作成したレポートです。数値は根拠パックから引用し、解釈と限界を分けて書いています。</p></div><span class="audit-badge" id="researchBadge">—</span></div>
+          <div class="toolbar panel"><div class="research-types" id="researchTypes"></div></div>
+          <div class="research-layout"><div class="research-list" id="researchList"></div><article class="panel research-view" id="researchView"></article></div>
+        </section>
+        <section class="page" data-page="comments" aria-labelledby="commentsTitle">
+          <div class="page-heading"><div><p class="eyebrow">AI RESEARCH LOG</p><h1 id="commentsTitle">AIコメント一覧</h1><p>主要銘柄を中心に、数値だけでは表しきれない見通し・根拠・見直し条件を週次で保存します。</p></div></div>
+          <div class="toolbar panel"><label class="grow">検索<input id="commentSearch" type="search" placeholder="銘柄コード・見通し・本文"></label><label>姿勢<select id="commentStance"><option value="">すべて</option><option value="positive">堅調</option><option value="neutral">中立</option><option value="negative">慎重</option></select></label></div>
+          <div class="comment-list" id="commentList"></div>
+        </section>
+
+        <section class="page" data-page="functions" aria-labelledby="functionsTitle">
+          <div class="page-heading"><div><p class="eyebrow">SYSTEM MAP</p><h1 id="functionsTitle">Function</h1><p>どのデータが、どの処理とモデルを通り、最終出力へ届くかを一画面で監査します。</p></div><span class="audit-badge">LIVE STATUS</span></div>
+          <section class="panel system-map-panel"><div class="section-title"><div><span>全体像</span><small>点灯=稼働、破線=手動、灰色=停止・未接続。ノードを押すと詳細を開きます。</small></div><em>POWER GRID</em></div><div class="system-network" id="systemFlow"></div><div class="network-detail" id="networkDetail"></div></section>
+          <div class="function-layout">
+            <section class="panel"><div class="section-title"><span>一ステップずつ見る</span><em>PIPELINE</em></div><div class="step-list" id="systemSteps"></div></section>
+            <section class="panel"><div class="section-title"><span>データ更新状況</span><em>INPUT HEALTH</em></div><div class="source-status-list" id="sourceStatus"></div></section>
+          </div>
+          <section class="panel debug-panel"><div class="section-title"><div><span>予測デバッグ</span><small>取得・変換・出力の最新スナップショットを検査</small></div><em>CHECKS</em></div><div class="debug-grid" id="debugChecks"></div><p>この公開画面は読み取り専用です。再取得・再学習はローカルのstockAIで実行し、検証を通ったJSONだけを公開します。</p></section>
+          <section class="panel model-connection-panel"><div class="section-title"><span>モデル接続表</span><em>CURRENT STATE</em></div><div class="table-panel inner"><table><thead><tr><th>系統</th><th>入力</th><th>処理</th><th>他系統との結合</th><th>最終出力</th><th>状態</th></tr></thead><tbody id="connectionRows"></tbody></table></div></section>
+        </section>
+      </div>
+    </main>
+  </div>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  <div class="float-tip" id="floatTip" role="tooltip" hidden></div>
+  <script src="gate.js"></script>
+</body>
+</html>

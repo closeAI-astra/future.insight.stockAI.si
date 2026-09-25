@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1920 1080" role="img" aria-label="Deep space and Earth background">
+  <defs>
+    <radialGradient id="space" cx="72%" cy="42%" r="85%">
+      <stop offset="0" stop-color="#101b24"/>
+      <stop offset=".46" stop-color="#05090d"/>
+      <stop offset="1" stop-color="#010204"/>
+    </radialGradient>
+    <radialGradient id="ocean" cx="31%" cy="25%" r="76%">
+      <stop offset="0" stop-color="#4aa5c2"/>
+      <stop offset=".38" stop-color="#17617f"/>
+      <stop offset=".72" stop-color="#092b42"/>
+      <stop offset="1" stop-color="#020a12"/>
+    </radialGradient>
+    <linearGradient id="land" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#729878"/>
+      <stop offset=".52" stop-color="#3f6655"/>
+      <stop offset="1" stop-color="#1b372f"/>
+    </linearGradient>
+    <radialGradient id="shade" cx="30%" cy="25%" r="72%">
+      <stop offset=".48" stop-color="#000" stop-opacity="0"/>
+      <stop offset=".72" stop-color="#000" stop-opacity=".2"/>
+      <stop offset="1" stop-color="#000" stop-opacity=".94"/>
+    </radialGradient>
+    <filter id="glow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="16"/>
+    </filter>
+    <filter id="soft" x="-10%" y="-10%" width="120%" height="120%">
+      <feGaussianBlur stdDeviation="2.5"/>
+    </filter>
+    <clipPath id="earthClip"><circle cx="1638" cy="475" r="520"/></clipPath>
+  </defs>
+  <rect width="1920" height="1080" fill="url(#space)"/>
+  <g fill="#d8ebef" opacity=".58">
+    <circle cx="72" cy="105" r="1.2"/><circle cx="171" cy="326" r=".8"/><circle cx="261" cy="154" r="1.4"/><circle cx="350" cy="541" r=".9"/><circle cx="432" cy="252" r="1.1"/><circle cx="526" cy="94" r=".8"/><circle cx="610" cy="418" r="1.4"/><circle cx="705" cy="214" r=".7"/><circle cx="789" cy="626" r="1.1"/><circle cx="870" cy="112" r="1.3"/><circle cx="966" cy="354" r=".8"/><circle cx="1050" cy="676" r="1.2"/><circle cx="1145" cy="189" r=".8"/>
+    <circle cx="111" cy="788" r="1.1"/><circle cx="227" cy="926" r=".7"/><circle cx="325" cy="745" r="1.3"/><circle cx="444" cy="958" r=".9"/><circle cx="548" cy="832" r=".7"/><circle cx="659" cy="1010" r="1.2"/><circle cx="748" cy="868" r=".8"/><circle cx="884" cy="971" r="1.1"/><circle cx="983" cy="817" r=".7"/><circle cx="1193" cy="952" r=".9"/>
+  </g>
+  <g opacity=".26" fill="#79b7cd">
+    <circle cx="128" cy="465" r="1.8"/><circle cx="575" cy="685" r="1.5"/><circle cx="821" cy="442" r="1.7"/><circle cx="1028" cy="71" r="1.4"/><circle cx="1182" cy="584" r="1.6"/>
+  </g>
+  <circle cx="1638" cy="475" r="531" fill="none" stroke="#57b7d7" stroke-opacity=".18" stroke-width="28" filter="url(#glow)"/>
+  <circle cx="1638" cy="475" r="520" fill="url(#ocean)"/>
+  <g clip-path="url(#earthClip)" fill="url(#land)" filter="url(#soft)" opacity=".9">
+    <path d="M1295 58c71 23 125 75 154 128 18 33 14 66 48 91 31 24 84 20 104 54 25 42-24 80-17 119 5 31 47 50 47 83 0 34-37 60-60 83-34 34-48 85-90 110-50 29-115 2-155-35-36-33-49-82-75-122-31-47-83-79-103-132-22-61-6-135 25-191 31-58 72-119 122-188z"/>
+    <path d="M1735 10c46 50 39 116 71 164 24 35 67 54 86 93 14 29 9 66 28 92 22 32 64 43 88 73 31 40 22 101 1 145-18 37-48 67-60 107-11 37-3 77-21 111-24 45-80 67-129 55-52-14-81-63-94-112-12-48-10-99-35-142-25-44-76-71-91-119-13-42 6-87 8-130 2-43-13-87 2-127 20-54 86-78 108-131 13-31 10-65 38-99z"/>
+    <path d="M1212 715c35-13 72 6 99 29 30 25 49 61 81 84 31 22 73 30 94 62 20 31 8 74-16 102-28 33-72 49-115 47-38-1-78-14-101-45-19-26-19-60-32-89-14-32-43-56-48-91-5-38 6-85 38-99z"/>
+    <path d="M1540 796c29-20 69-14 96 8 28 22 40 60 67 84 25 22 63 27 84 53 24 30 16 78-8 108-27 33-72 49-114 42-38-7-68-35-91-66-25-34-49-73-54-116-4-40-13-88 20-113z"/>
+  </g>
+  <g clip-path="url(#earthClip)" fill="none" stroke="#cce7e4" stroke-opacity=".13" stroke-width="10">
+    <path d="M1200 255c166-72 366-70 526 14"/><path d="M1170 470c209-86 457-82 638 25"/><path d="M1250 674c181-59 374-41 516 54"/>
+  </g>
+  <circle cx="1638" cy="475" r="520" fill="url(#shade)"/>
+  <path d="M1269 128a520 520 0 0 1 585 29" fill="none" stroke="#9dd8e6" stroke-opacity=".68" stroke-width="4"/>
+  <g clip-path="url(#earthClip)" fill="#f5d993" opacity=".72">
+    <circle cx="1438" cy="307" r="2"/><circle cx="1487" cy="344" r="1.6"/><circle cx="1512" cy="381" r="1.8"/><circle cx="1762" cy="335" r="1.6"/><circle cx="1790" cy="389" r="2"/><circle cx="1838" cy="451" r="1.4"/><circle cx="1715" cy="708" r="1.8"/><circle cx="1750" cy="751" r="1.4"/>
+  </g>
+</svg>
