@@ -1,7 +1,7 @@
 // Future Sight — パスワード入口(publish_pages.py が生成。編集しない)
 (() => {
   const META_URL = "enc-meta.json";
-  const KEY_STORE = "fs-pages-key";
+  const KEY_STORE = "fs-pages-key:" + new URL(".", location.href).pathname;
   const b64 = (s) => Uint8Array.from(atob(s), (c) => c.charCodeAt(0));
   const toB64 = (buf) => btoa(String.fromCharCode(...new Uint8Array(buf)));
   let key = null, meta = null;
@@ -22,11 +22,15 @@
   }
   function installFetch() {
     const orig = window.fetch.bind(window);
+    const dataPath = new URL("data/", document.baseURI).pathname;
     window.fetch = async (input, init) => {
-      const url = typeof input === "string" ? input : input.url;
+      const url = input instanceof Request ? input.url : String(input);
       const u = new URL(url, location.href);
-      if (u.origin === location.origin && /\/data\/.+\.json$/.test(u.pathname)) {
-        const r = await orig(u.pathname + ".enc" + u.search, init);
+      if (u.origin === location.origin && u.pathname.startsWith(dataPath) && u.pathname.endsWith(".json")) {
+        const request = new Request(u, input instanceof Request ? input : init);
+        if (request.method !== "GET") return orig(input, init);
+        const encryptedUrl = new URL(u); encryptedUrl.pathname += ".enc";
+        const r = await orig(new Request(encryptedUrl, request), init);
         if (!r.ok) return new Response("", { status: r.status, statusText: r.statusText });
         const body = await decryptBytes(await r.arrayBuffer());
         return new Response(body, { status: 200, headers: { "Content-Type": "application/json; charset=utf-8" } });
@@ -43,7 +47,7 @@
     const wrap = document.createElement("div"); wrap.id = "fs-gate";
     wrap.innerHTML = `<form><h1>Future Sight</h1><p>閲覧にはパスワードが必要です。</p>
       <input type="password" autocomplete="current-password" placeholder="パスワード" required>
-      <label><input type="checkbox" checked> この端末で覚える</label>
+      <label><input type="checkbox"> この端末で覚える</label>
       <button type="submit">開く</button><p class="fs-gate-msg">${message || ""}</p></form>`;
     const st = document.createElement("style");
     st.textContent = `#fs-gate{position:fixed;inset:0;z-index:99999;display:grid;place-items:center;background:#0f1a2e;font-family:"Noto Sans JP",system-ui,sans-serif}
@@ -70,8 +74,9 @@
   async function boot() {
     if (!window.crypto?.subtle || typeof DecompressionStream === "undefined") { document.body.innerHTML = "<p style='padding:24px'>このブラウザは対応していません(最新の Chrome / Edge / Safari / Firefox を使ってください)。</p>"; return; }
     meta = await (await fetch(META_URL, { cache: "no-store" })).json();
-    for (const store of [sessionStorage, localStorage]) {
+    for (const storeName of ["sessionStorage", "localStorage"]) {
       try {
+        const store = window[storeName];
         const saved = JSON.parse(store.getItem(KEY_STORE) || "null");
         if (saved && saved.salt === meta.salt) {
           key = await crypto.subtle.importKey("raw", b64(saved.raw), { name: "AES-GCM" }, false, ["decrypt"]);
@@ -81,5 +86,9 @@
     }
     showGate("");
   }
-  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot); else boot();
+  const launch = () => boot().catch(() => {
+    showGate("入口のデータを取得できませんでした。ページを再読み込みしてください。");
+    document.querySelector("#fs-gate button").disabled = true;
+  });
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", launch); else launch();
 })();

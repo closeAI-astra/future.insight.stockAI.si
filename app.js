@@ -97,6 +97,35 @@ function escapeHtml(value = "") {
   return String(value).replace(/[&<>'"]/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" })[char]);
 }
 
+function safeHref(value) {
+  try {
+    const url = new URL(String(value));
+    if (["https:", "http:"].includes(url.protocol) && !url.username && !url.password) return escapeHtml(url.href);
+  } catch { /* 不正なURLはリンク先に使わない */ }
+  return "#";
+}
+
+// 同じデータの同時取得を共有する。失敗を保存せず、次の操作で再試行する。
+const jsonRequests = new Map();
+function fetchJson(path) {
+  if (!jsonRequests.has(path)) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 20000);
+    const pending = fetch(path, { cache: "no-cache", signal: controller.signal })
+      .then((response) => { if (!response.ok) throw new Error(`データ取得失敗: ${path} (${response.status})`); return response.json(); })
+      .finally(() => { clearTimeout(timer); jsonRequests.delete(path); });
+    jsonRequests.set(path, pending);
+  }
+  return jsonRequests.get(path);
+}
+
+function rememberChunk(cache, key, value) {
+  delete cache[key];
+  cache[key] = value;
+  while (Object.keys(cache).length > 8) delete cache[Object.keys(cache)[0]];
+  return value;
+}
+
 function setTheme(theme) {
   const allowed = ["light", "dark", "prototype", "earth"];
   state.theme = allowed.includes(theme) ? theme : "light";
@@ -131,18 +160,15 @@ function navigate(page, opts = {}) {
 async function loadData() {
   // 2026-09-25 最適化: dashboard.json が届いた時点でホームを先に描く(残りの約10MBは並行して読み込み続ける)。
   //   Pages 版は各 JSON を復号してから使うので、以前は全部そろうまで画面が空だった。
-  const get = (path, fallback) => fetch(path, { cache: "no-store" }).then((r) => (r.ok ? r.json() : fallback)).catch(() => fallback);
-  const dashboardPromise = fetch("data/dashboard.json", { cache: "no-store" });
+  const get = (path, fallback) => fetchJson(path).catch(() => fallback);
+  state.data = await fetchJson("data/dashboard.json");
+  try { renderHome(); document.body.classList.add("fs-partial"); } catch (error) { console.warn(error); }
   const restPromise = Promise.all([
     get("data/comments.json", []), get("data/fundamentals.json", {}), get("data/market-history.json", {}), get("data/system.json", { sources: [], steps: [] }),
     get("data/earnings.json", {}), get("data/indices.json", []), get("data/relations.json", { companies: {} }), get("data/options.json", { state: "not_connected" }),
     get("data/model-lab.json", null), get("data/data-inventory.json", null), get("data/evidence.json", {}), get("data/edinet.json", {}), get("data/company.json", { stocks: {} }), get("data/field-catalog.json", {}),
   ]);
   const marketPromise = loadMarketData();
-  const dashboardResponse = await dashboardPromise;
-  if (!dashboardResponse.ok) throw new Error("dashboard.json を読み込めませんでした");
-  state.data = await dashboardResponse.json();
-  try { renderHome(); document.body.classList.add("fs-partial"); } catch (error) { console.warn(error); }
   [state.comments, state.fundamentals, state.marketHistory, state.system, state.earnings, state.indices, state.relations, state.options,
     state.lab, state.inventory, state.evidence, state.edinet, state.company, state.fieldCatalog] = await restPromise;
   await marketPromise;
@@ -294,15 +320,20 @@ function openStockChart(code) {
 
 async function loadChart(code) {
   if (!code) return;
+  const requestId = state.chartLoadId = (state.chartLoadId || 0) + 1;
   const company = state.data.predictions.find((row) => row.code === code);
   if (state.tv && (state.sym?.type !== "stock" || state.sym?.code !== code)) { state.tv.count = null; state.tv.offset = 0; state.tv.hover = null; state.tv.pending = null; }
   state.selectedCode = code; state.sym = { type: "stock", code };
   if (state.watchMode === "index" && state.page === "chart") state.watchMode = "stock";
   if (company) { $("#chartTitle").textContent = company.name; $("#chartSubhead").textContent = `${company.code} · ${company.market} · ${company.industry}`; }
   if (state.tvLoadedKey !== code) {
-    try { state.chartData = await fetchChartPoints(code); } catch { state.chartData = []; }
-    if (code !== state.selectedCode) return;
-    state.tvLoadedKey = code;
+    let chart = null;
+    try { chart = await fetchChartPoints(code); } catch { showToast("チャートを取得できません。銘柄を選び直すと再試行します"); }
+    if (requestId !== state.chartLoadId || state.sym?.type !== "stock" || state.sym?.code !== code || state.page !== "chart") return;
+    state.chartData = chart?.daily || [];
+    state.chartWeekly = chart?.weekly || [];
+    state.chartSplits = chart?.splits || [];
+    state.tvLoadedKey = chart ? code : null;
   }
   if (code !== state.selectedCode || state.page !== "chart") return;
   syncTvControls();
@@ -351,7 +382,7 @@ function renderStockDetailsCore() {
   if ($("#stockMarketHistory")) $("#stockMarketHistory").innerHTML = `<div class="market-history-summary"><article><span>信用倍率</span><strong>${latestCredit?.ratio ?? "—"}倍</strong><small>${latestCredit?.date || "履歴なし"}</small></article><article><span>調整後DPS</span><strong>${latestDividend?.dps == null ? "—" : yen(latestDividend.dps)}</strong><small>${latestDividend?.fiscalYear || "履歴なし"}</small></article></div><details><summary>信用・配当の過去データ</summary><div class="history-columns"><div><b>信用残</b>${credit.slice().reverse().map((row) => `<p>${row.date}　売 ${Math.round(row.sellBalance || 0).toLocaleString()} / 買 ${Math.round(row.buyBalance || 0).toLocaleString()}　${row.ratio ?? "—"}倍</p>`).join("") || "<p>なし</p>"}</div><div><b>配当</b>${dividends.slice().reverse().map((row) => `<p>${row.fiscalYear}　${row.dps ?? "—"}円　配当性向 ${row.payoutRatio ?? "—"}%</p>`).join("") || "<p>なし</p>"}</div></div></details>`;
 
   const news = state.data.news.filter((item) => item.code === company.code).slice(0, 5);
-  $("#stockNews").innerHTML = news.length ? news.map((item) => `<article class="stock-news-row"><time>${escapeHtml(item.publishedAt.slice(0,10))}</time><a href="${escapeHtml(item.url || "#")}" target="_blank" rel="noopener noreferrer">${escapeHtml(item.title)}</a></article>`).join("") : '<div class="empty-state"><p>保存済みの関連ニュースはありません。</p></div>';
+  $("#stockNews").innerHTML = news.length ? news.map((item) => `<article class="stock-news-row"><time>${escapeHtml(item.publishedAt.slice(0,10))}</time><a href="${safeHref(item.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(item.title)}</a></article>`).join("") : '<div class="empty-state"><p>保存済みの関連ニュースはありません。</p></div>';
 
   renderEarnings(company);
   renderRelations(company);
@@ -654,7 +685,7 @@ function renderSystem() {
 function renderNews() {
   const query = ($("#newsSearch")?.value || "").trim().toLowerCase(); const quality = Number($("#newsQuality")?.value || 0);
   const rows = state.data.news.filter((item) => (!quality || item.quality >= quality) && (!query || `${item.code} ${item.title} ${item.source}`.toLowerCase().includes(query)));
-  $("#newsList").innerHTML = rows.slice(0, 80).map((item) => `<article class="news-item"><time>${escapeHtml(item.publishedAt.slice(0, 16).replace("T", " "))}<br>${escapeHtml(item.code || "市場")}</time><div><h3>${escapeHtml(item.title)}<span class="source-badge">${escapeHtml(item.source || "不明")}</span></h3><p>${item.bucket === "stock" ? "個別銘柄" : "市場関連"} · 品質レベル ${item.quality}</p></div>${item.url ? `<a href="${escapeHtml(item.url)}" target="_blank" rel="noopener noreferrer">元記事 ↗</a>` : ""}</article>`).join("") || '<div class="empty-state"><strong>該当するニュースはありません</strong></div>';
+  $("#newsList").innerHTML = rows.slice(0, 80).map((item) => `<article class="news-item"><time>${escapeHtml(item.publishedAt.slice(0, 16).replace("T", " "))}<br>${escapeHtml(item.code || "市場")}</time><div><h3>${escapeHtml(item.title)}<span class="source-badge">${escapeHtml(item.source || "不明")}</span></h3><p>${item.bucket === "stock" ? "個別銘柄" : "市場関連"} · 品質レベル ${item.quality}</p></div>${item.url ? `<a href="${safeHref(item.url)}" target="_blank" rel="noopener noreferrer">元記事 ↗</a>` : ""}</article>`).join("") || '<div class="empty-state"><strong>該当するニュースはありません</strong></div>';
 }
 
 // 2026-09-25: カード全体を押すと指数ページへ。模型別の表は横にはみ出していたので、幅に収まる行に組み直した
@@ -678,7 +709,7 @@ function renderIndices() {
   grid.querySelectorAll("[data-index-go-chart]").forEach((b) => b.addEventListener("click", (event) => { event.stopPropagation(); goChart({ type: "index", code: b.dataset.indexGoChart }); }));
   const connected = ["available", "proxy_available"].includes(state.options?.state);
   $("#optionsState").textContent = state.options?.state === "proxy_available" ? "VIX代理変数で稼働" : connected ? "原本検出" : "未接続";
-  const sources = (state.options?.sources || []).map((source) => `<li><a href="${escapeHtml(source.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(source.label)} ↗</a> <small>${source.state === "not_connected" ? "未接続" : "短期履歴"}</small></li>`).join("");
+  const sources = (state.options?.sources || []).map((source) => `<li><a href="${safeHref(source.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(source.label)} ↗</a> <small>${source.state === "not_connected" ? "未接続" : "短期履歴"}</small></li>`).join("");
   $("#optionsBody").innerHTML = `<div class="options-empty"><span class="status-dot ${connected ? "collecting" : "paused"}"></span><div><strong>${connected ? "オプション由来特徴を限定利用中" : "オプション原本はまだありません"}</strong><p>${escapeHtml(state.options?.message || "")}</p><ul>${sources}<li>大口動向は断定せず、IV・スキュー・建玉を観測可能な代理変数として扱います。</li></ul></div></div>`;
 }
 function drawIndexChart(canvas, points) {
@@ -1142,20 +1173,17 @@ function decodeChartDoc(doc) {
 
 async function fetchChartPoints(code) {
   let doc = null;
-  try {
-    if (!state.chartIndex) { const r = await fetch("data/chart-index.json", { cache: "no-store" }); state.chartIndex = r.ok ? await r.json() : {}; }
-    const chunk = state.chartIndex?.[code];
-    if (chunk) {
-      state.chartChunks = state.chartChunks || {};
-      if (!state.chartChunks[chunk]) { const r = await fetch(`data/chart-chunks/${chunk}.json`, { cache: "no-store" }); state.chartChunks[chunk] = r.ok ? await r.json() : {}; }
-      doc = state.chartChunks[chunk][code] || null;
-    }
-  } catch { doc = null; }
-  if (!doc) { try { const r = await fetch(`data/charts/${encodeURIComponent(code)}.json`, { cache: "no-store" }); doc = r.ok ? await r.json() : []; } catch { doc = []; } }
+  if (!state.chartIndex) state.chartIndex = await fetchJson("data/chart-index.json");
+  const chunk = state.chartIndex?.[code];
+  if (chunk) {
+    state.chartChunks = state.chartChunks || {};
+    const bundle = state.chartChunks[chunk] || rememberChunk(state.chartChunks, chunk, await fetchJson(`data/chart-chunks/${encodeURIComponent(chunk)}.json`));
+    doc = bundle[code] || null;
+  }
+  if (!doc) doc = await fetchJson(`data/charts/${encodeURIComponent(code)}.json`);
   const decoded = decodeChartDoc(doc);
-  state.chartWeekly = decoded.weekly;
-  state.chartSplits = Array.isArray(doc?.s) ? doc.s : [];   // 2026-09-25: 株式分割(売買履歴の単価を割り戻す)
-  return decoded.daily;
+  // 読み込み中に別銘柄へ移動しても、共有のチャート状態を書き換えない。
+  return { ...decoded, splits: Array.isArray(doc?.s) ? doc.s : [] };
 }
 function chartRows() {
   const daily = state.chartData || [];
@@ -1702,11 +1730,11 @@ function bindSymbolSearch() {
 async function fetchStockDetail(code) {
   if (state.detail[code]) return state.detail[code];
   try {
-    if (!state.detailIndex) { const r = await fetch("data/stock-detail-index.json", { cache: "no-store" }); state.detailIndex = r.ok ? await r.json() : {}; }
+    if (!state.detailIndex) state.detailIndex = await fetchJson("data/stock-detail-index.json");
     const chunk = state.detailIndex[code]; if (!chunk) return null;
     state.detailChunks = state.detailChunks || {};
-    if (!state.detailChunks[chunk]) { const r = await fetch(`data/stock-detail/${chunk}.json`, { cache: "no-store" }); state.detailChunks[chunk] = r.ok ? await r.json() : {}; }
-    state.detail[code] = state.detailChunks[chunk][code] || null;
+    const bundle = state.detailChunks[chunk] || rememberChunk(state.detailChunks, chunk, await fetchJson(`data/stock-detail/${encodeURIComponent(chunk)}.json`));
+    state.detail[code] = bundle[code] || null;
   } catch { state.detail[code] = null; }
   return state.detail[code];
 }
@@ -1963,7 +1991,7 @@ function tabResearch(doc, company) {
   const ad = r.newsAdaptive || [];
   const adTable = ad.length ? `<div class="broker-row-head"><h3>ニュースの BERT 分類と固有半減期</h3><small>意味アンカー版(シャドー)。半減期が長いほど長く効くと推定</small></div><div class="broker-table-wrap tall"><table class="broker-table left"><thead><tr><th>利用可能日</th><th>見出し</th><th>分類</th><th>確信度</th><th>半減期</th><th>分類確率(国策/構造/業績/資本/短期)</th></tr></thead><tbody>${ad.map((a) => `<tr><th>${escapeHtml(a.at || "")}</th><td class="wrap">${escapeHtml(a.title || "(見出しなし)")}</td><td>${escapeHtml(a.cat || "")}</td><td>${metricPercent(a.conf)}</td><td>${number(a.halfLife)?.toFixed(1) ?? "—"}日</td><td><div class="prob-bars">${(a.p || []).map((p, i) => `<i title="${cats[i]} ${metricPercent(p)}" style="width:${Math.max(2, number(p, 0) * 100)}%"></i>`).join("")}</div></td></tr>`).join("")}</tbody></table></div>` : "";
   const news = r.news || [];
-  const newsList = news.length ? `<div class="broker-row-head"><h3>保存済みニュース(新しい順・最大50件)</h3><small>BERT でベクトル化済み ${r.bertArticles || 0}件</small></div><div class="news-mini">${news.map((n) => `<div><time>${escapeHtml(n.at)}</time>${n.url ? `<a href="${escapeHtml(n.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(n.title)}</a>` : `<span>${escapeHtml(n.title)}</span>`}<small>${escapeHtml(n.source || "")}</small></div>`).join("")}</div>` : "";
+  const newsList = news.length ? `<div class="broker-row-head"><h3>保存済みニュース(新しい順・最大50件)</h3><small>BERT でベクトル化済み ${r.bertArticles || 0}件</small></div><div class="news-mini">${news.map((n) => `<div><time>${escapeHtml(n.at)}</time>${n.url ? `<a href="${safeHref(n.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(n.title)}</a>` : `<span>${escapeHtml(n.title)}</span>`}<small>${escapeHtml(n.source || "")}</small></div>`).join("")}</div>` : "";
   const evidence = r.evidence ? `<div class="broker-row-head"><h3>最終まとめ用の根拠ファイル(自然言語生成の入力)</h3><small>${escapeHtml(r.evidenceFile || "")}</small></div><div class="md-body">${mdToHtml(r.evidence)}</div>` : '<div class="broker-row-head"><h3>最終まとめ用の根拠ファイル</h3><small>この銘柄は根拠ファイルの対象外(注目銘柄のみ生成)</small></div>';
   return `${predTable}${shadowTable}${evidence}${adTable}${newsList}`;
 }
@@ -2029,7 +2057,7 @@ state.researchId = null;
 state.nlpTab = "evidence";
 
 async function loadMarketData() {
-  const get = async (path, fallback) => { try { const r = await fetch(path, { cache: "no-store" }); return r.ok ? await r.json() : fallback; } catch { return fallback; } };
+  const get = (path, fallback) => fetchJson(path).catch(() => fallback);
   [state.indexPages, state.marketData, state.research, state.researchPack] = await Promise.all([
     get("data/index-pages.json", { pages: [] }), get("data/market.json", {}), get("data/research.json", { reports: [] }), get("data/research-pack.json", {}),
   ]);
@@ -2893,6 +2921,7 @@ function watchOrder(type) {
   return rows;
 }
 async function loadChartsPage() {
+  const requestId = state.chartLoadId = (state.chartLoadId || 0) + 1;
   const sym = state.chartsSym || { type: "stock", code: state.selectedCode };
   const key = sym.type === "index" ? `idx-${sym.code}` : sym.code;
   if (state.tv && symKey() !== key) { state.tv.count = null; state.tv.offset = 0; state.tv.hover = null; state.tv.pending = null; }
@@ -2900,11 +2929,12 @@ async function loadChartsPage() {
   if (sym.type === "stock") state.selectedCode = sym.code; else state.indexId = sym.code;
   renderChartsHeader();
   if (state.tvLoadedKey !== key) {
-    let rows = [];
-    if (sym.type === "index") { rows = indexChartRows(indexPage(sym.code)); state.chartWeekly = []; state.chartSplits = []; }
-    else { try { rows = await fetchChartPoints(sym.code); } catch { rows = []; } }
-    if (state.page !== "charts" || symKey() !== key) return;
-    state.chartData = rows; state.tvLoadedKey = key;
+    let chart = null;
+    if (sym.type === "index") chart = { daily: indexChartRows(indexPage(sym.code)), weekly: [], splits: [] };
+    else { try { chart = await fetchChartPoints(sym.code); } catch { showToast("チャートを取得できません。銘柄を選び直すと再試行します"); } }
+    if (requestId !== state.chartLoadId || state.page !== "charts" || symKey() !== key) return;
+    state.chartData = chart?.daily || []; state.chartWeekly = chart?.weekly || []; state.chartSplits = chart?.splits || [];
+    state.tvLoadedKey = chart ? key : null;
   }
   if (state.page !== "charts") return;
   renderChartsHeader(); syncTvControls(); renderWatchlist(); renderSymbolCard(); renderCommentTimeline();
