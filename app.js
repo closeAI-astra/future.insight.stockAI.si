@@ -3107,7 +3107,7 @@ function renderStockCards(company) {
 }
 
 // ---- 更新時刻のまとめ(2026-09-25 改訂g。run_chain.ps1 → scripts/mark_update.py が data/update-times.json を書く) ----
-const UPDATE_TIME_LABELS = [["infer", "予測"], ["train", "再学習(DNN以外)"], ["dnn", "DNN学習"], ["news", "ニュース"], ["shinyo", "信用残"], ["fundamentals", "決算"], ["consensus", "コンセンサス"], ["options", "オプション・VIX"], ["publish", "サイト公開"], ["weekly", "週次の再検証(日曜)"], ["comments", "AIコメント(日曜)"]];
+const UPDATE_TIME_LABELS = [["infer", "予測"], ["train", "再学習(DNN以外)"], ["dnn", "DNN学習"], ["news", "ニュース"], ["shinyo", "信用残(株探・週次)"], ["shinyo_jpx", "信用残(JPX・日次)"], ["fundamentals", "決算"], ["consensus", "コンセンサス"], ["options", "オプション・VIX"], ["publish", "サイト公開"], ["weekly", "週次の再検証(日曜)"], ["comments", "AIコメント(日曜)"]];
 async function renderUpdateTimes() {
   const box = $("#homeTimes"); if (!box) return;
   let d = null;
