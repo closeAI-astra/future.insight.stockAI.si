@@ -30,6 +30,7 @@
         <button class="nav-item" type="button" data-nav="chart"><span class="nav-icon">⌁</span><span>個別銘柄</span></button>
         <button class="nav-item" type="button" data-nav="charts"><span class="nav-icon">⟋</span><span>チャート</span><em class="nav-new">NEW</em></button>
         <button class="nav-item" type="button" data-nav="indices"><span class="nav-icon">◎</span><span>INDEX</span></button>
+        <button class="nav-item" type="button" data-nav="macro"><span class="nav-icon">◇</span><span>マクロ</span><em class="nav-new">NEW</em></button>
         <button class="nav-item" type="button" data-nav="guidance"><span class="nav-icon">◐</span><span>決算予想</span><em class="nav-new">NEW</em></button>
         <button class="nav-item" type="button" data-nav="research"><span class="nav-icon">✎</span><span>リサーチ</span><em class="nav-new">NEW</em></button>
         <button class="nav-item" type="button" data-nav="comments"><span class="nav-icon">◌</span><span>AIコメント</span></button>
@@ -384,6 +385,12 @@
             <li><b>t値</b> ― 平均の差が偶然で説明できるか。|t| が2以上でようやく「偶然ではなさそう」。GNN・Transformer はどちらも届かなかったので不採用。</li>
           </ol></section>
           <div id="expBody"><div class="empty-state"><p>読み込み中…</p></div></div>
+        </section>
+
+        <section class="page" data-page="macro" aria-labelledby="macroTitle">
+          <div class="page-heading"><div><p class="eyebrow">MACRO · COMMODITIES · TRADE</p><h1 id="macroTitle">マクロ・商品・貿易</h1><p>前夜の米国の引け、ボラティリティ・金利・為替、コモディティ、財務省の貿易統計、鉱工業生産、Claude の強弱スクリーンと引け後レポートをまとめて見ます。表示用で、予測模型の入力ではありません。</p></div><span class="audit-badge" id="macroBadge">読込中</span></div>
+          <div class="broker-seg wide mx-tabs" id="macroTabs" role="tablist"></div>
+          <div id="macroBody"></div>
         </section>
 
         <section class="page" data-page="data" aria-labelledby="dataTitle">

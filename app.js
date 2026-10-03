@@ -155,6 +155,7 @@ function navigate(page, opts = {}) {
   if (page === "indices") requestAnimationFrame(renderIndices);
   if (page === "lab") requestAnimationFrame(drawLabCharts);
   if (page === "data") requestAnimationFrame(drawDataCharts);
+  if (page === "macro") requestAnimationFrame(renderMacroPage);
   hideTip();
 }
 async function loadData() {
@@ -2358,7 +2359,7 @@ function renderNlp() {
 
 function registerWebMcp() {
   const context = document.modelContext; if (!context?.registerTool) return;
-  const controller = new AbortController(); const pages = ["home","predictions","stocks","chart","indices","index","research","guidance","comments","trades","news","models","lab","construction","experimental","data","functions"];
+  const controller = new AbortController(); const pages = ["home","predictions","stocks","chart","indices","index","macro","research","guidance","comments","trades","news","models","lab","construction","experimental","data","functions"];
   Promise.resolve(context.registerTool({ name:"navigate_future_sight", title:"Future Sightの画面を開く", description:"Future Sight内の指定画面へ移動する。", inputSchema:{type:"object",properties:{page:{type:"string",enum:pages}},required:["page"],additionalProperties:false}, annotations:{readOnlyHint:true,untrustedContentHint:false}, execute({page}){ if(!pages.includes(page)) throw new Error("unknown page"); navigate(page); return {page}; } },{signal:controller.signal})).catch(()=>{});
   Promise.resolve(context.registerTool({ name:"set_future_sight_theme", title:"表示モードを変更", description:"ライト、ダーク、プロトタイプ、Earthの表示テーマを変更する。", inputSchema:{type:"object",properties:{theme:{type:"string",enum:["light","dark","prototype","earth"]}},required:["theme"],additionalProperties:false}, annotations:{readOnlyHint:false,untrustedContentHint:false}, execute({theme}){ setTheme(theme); return {theme:state.theme}; } },{signal:controller.signal})).catch(()=>{});
   Promise.resolve(context.registerTool({ name:"open_stock_chart", title:"銘柄チャートを開く", description:"証券コードを指定して銘柄チャートを表示する。", inputSchema:{type:"object",properties:{code:{type:"string",pattern:"^[0-9A-Za-z.]{3,12}$"}},required:["code"],additionalProperties:false}, annotations:{readOnlyHint:true,untrustedContentHint:false}, async execute({code}){ if(!state.data.predictions.some((row)=>row.code===code)) throw new Error("unknown code"); openStockChart(code); await loadChart(code); return {code,page:"chart"}; } },{signal:controller.signal})).catch(()=>{});
@@ -3107,7 +3108,7 @@ function renderStockCards(company) {
 }
 
 // ---- 更新時刻のまとめ(2026-09-25 改訂g。run_chain.ps1 → scripts/mark_update.py が data/update-times.json を書く) ----
-const UPDATE_TIME_LABELS = [["infer", "予測"], ["train", "再学習(DNN以外)"], ["dnn", "DNN学習"], ["news", "ニュース"], ["shinyo", "信用残(株探・週次)"], ["shinyo_jpx", "信用残(JPX・日次)"], ["fundamentals", "決算"], ["consensus", "コンセンサス"], ["options", "オプション・VIX"], ["publish", "サイト公開"], ["weekly", "週次の再検証(日曜)"], ["comments", "AIコメント(日曜)"]];
+const UPDATE_TIME_LABELS = [["infer", "予測"], ["train", "再学習(DNN以外)"], ["dnn", "DNN学習"], ["news", "ニュース"], ["shinyo", "信用残(株探・週次)"], ["shinyo_jpx", "信用残(JPX・日次)"], ["fundamentals", "決算"], ["consensus", "コンセンサス"], ["options", "オプション・VIX"], ["us_close", "米国の引け後"], ["commodities", "コモディティ"], ["trade", "貿易統計(月次)"], ["ls_screen", "強弱スクリーン(Claude)"], ["macro", "MACRO ページ"], ["econ_fetch", "経済指標(FRED・Yahoo)"], ["econ", "経済指標・つながり"], ["publish", "サイト公開"], ["weekly", "週次の再検証(日曜)"], ["comments", "AIコメント(日曜)"]];
 async function renderUpdateTimes() {
   const box = $("#homeTimes"); if (!box) return;
   let d = null;
@@ -3139,6 +3140,362 @@ function renderHomeExtras() {
     el.textContent = `${state.data.asOf || "—"} 基準${run ? ` · ${modeLabel}${run.complete ? "" : "(途中)"} ${t && !isNaN(t) ? t.toLocaleString("ja-JP", { timeZone: "Asia/Tokyo", month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" }) : ""}` : " 更新"}`;
     el.title = run ? `最後の実行: mode=${run.mode} complete=${run.complete} exit=${run.exit_code ?? "—"} 開始 ${run.started_at || "—"} 終了 ${run.finished_at || "—"}` : "";
   }
+}
+
+
+// ===== MACRO ページ(2026-10-04 新設)=====================================================
+// dist/data/macro.json(future-sight/scripts/export_macro.py)を読む。米国の引け・ボラ・金利為替・指数・半導体の先行指標・
+// コモディティ・貿易統計(財務省)・鉱工業生産・Claude の強弱 L/S スクリーン・引け後レポート。すべて表示専用(模型には入っていない)。
+const MACRO_TABS = [["overview", "概要"], ["econ", "経済指標"], ["links", "つながり・学習"], ["us", "米国の引け"], ["markets", "ボラ・金利・指数"], ["commod", "コモディティ"], ["trade", "貿易統計"], ["iip", "鉱工業生産"], ["ls", "強弱スクリーン"], ["reports", "Claude レポート"]];
+const macroState = { tab: "overview", tradeFlow: "export", tradeArea: "WORLD", tradeItem: null, lsView: "bigLong", reportIdx: 0, detail: null };
+try { const t = localStorage.getItem("future-sight-macro-tab"); if (t && MACRO_TABS.some(([k]) => k === t)) macroState.tab = t; } catch { /* 保存できない環境 */ }
+let macroLoading = null;
+async function loadMacro() {
+  if (state.macro) return state.macro;
+  if (!macroLoading) macroLoading = fetchJson("data/macro.json").then((d) => { state.macro = d; return d; }).catch(() => { state.macro = { error: true }; return state.macro; });
+  return macroLoading;
+}
+const mxNum = (v, d = 2) => { const n = number(v); return n === null ? "—" : n.toLocaleString("ja-JP", { minimumFractionDigits: d, maximumFractionDigits: d }); };
+const mxPct = (v, d = 1) => { const n = number(v); return n === null ? "—" : `<span class="${n >= 0 ? "positive-text" : "negative-text"}">${percent(n, d)}</span>`; };
+const mxOku = (v) => { const n = number(v); if (n === null) return "—"; return Math.abs(n) >= 10000 ? `${(n / 10000).toLocaleString("ja-JP", { maximumFractionDigits: 2 })}兆円` : `${Math.round(n).toLocaleString("ja-JP")}億円`; };
+function mxSpark(values, opts = {}) {
+  const v = (values || []).map((x) => number(x)).filter((x) => x !== null); if (v.length < 2) return "";
+  const w = opts.w || 120, h = opts.h || 34; const lo = Math.min(...v), hi = Math.max(...v); const span = hi - lo || 1;
+  const pts = v.map((x, i) => `${(i / (v.length - 1) * w).toFixed(1)},${(h - 2 - (x - lo) / span * (h - 4)).toFixed(1)}`).join(" ");
+  const up = opts.color ? opts.color : v[v.length - 1] >= v[0] ? "var(--positive)" : "var(--negative)";
+  const base = opts.zero && lo < 0 && hi > 0 ? `<line x1="0" x2="${w}" y1="${(h - 2 - (0 - lo) / span * (h - 4)).toFixed(1)}" y2="${(h - 2 - (0 - lo) / span * (h - 4)).toFixed(1)}" stroke="var(--line-strong)" stroke-dasharray="2 2"/>` : "";
+  return `<svg class="mx-spark" viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" aria-hidden="true">${base}<polyline fill="none" stroke="${up}" stroke-width="1.5" points="${pts}"/></svg>`;
+}
+function mxCard(it, key) {
+  if (!it?.available) return `<article class="mx-card off"><header><b>${escapeHtml(it?.name || it?.sym || "—")}</b><small>${escapeHtml(it?.sym || "")}</small></header><p class="mx-na">未取得</p></article>`;
+  const ratio = it.isRatio; const lv = ratio ? mxNum(it.last, 3) : mxNum(it.last, Math.abs(number(it.last)) >= 1000 ? 0 : 2);
+  const pos = number(it.pos1y);
+  return `<article class="mx-card" data-mx-detail="${escapeHtml(key)}" tabindex="0" title="押すと5年の週足を表示"><header><b>${escapeHtml(it.name)}</b><small>${escapeHtml(it.sym)}${it.unit ? ` · ${escapeHtml(it.unit)}` : ""}</small></header>
+    <div class="mx-val"><strong>${lv}</strong><span>${escapeHtml(it.date || "")}</span></div>
+    <div class="mx-chg"><span>1日 ${mxPct(it.chg1)}</span><span>5日 ${mxPct(it.chg5)}</span><span>20日 ${mxPct(it.chg20)}</span><span>1年 ${mxPct(it.chg250, 0)}</span></div>
+    ${mxSpark(it.spark, { w: 220, h: 40 })}
+    <div class="mx-range" title="過去1年のレンジの中の位置(安値0%〜高値100%)"><i style="left:${pos === null ? 50 : Math.round(pos * 100)}%"></i></div>
+    <small class="mx-range-label">1年レンジ ${mxNum(it.lo1y, ratio ? 2 : 2)} 〜 ${mxNum(it.hi1y, 2)} の ${pos === null ? "—" : Math.round(pos * 100) + "%"} 地点</small>
+    ${it.jp ? `<small class="mx-jp">日本株: ${escapeHtml(it.jp)}</small>` : ""}</article>`;
+}
+function mxDetailChart(it) {
+  const pts = (it?.weekly || []).filter((p) => number(p[1]) !== null); if (pts.length < 3) return '<p class="lab-foot">履歴が足りません。</p>';
+  const W = 900, H = 260, L = 56, R = 12, T = 12, B = 26; const vals = pts.map((p) => number(p[1])); const lo = Math.min(...vals), hi = Math.max(...vals); const span = hi - lo || 1;
+  const x = (i) => L + i / (pts.length - 1) * (W - L - R); const y = (v) => T + (1 - (v - lo) / span) * (H - T - B);
+  const line = pts.map((p, i) => `${x(i).toFixed(1)},${y(vals[i]).toFixed(1)}`).join(" ");
+  const ticks = [lo, lo + span / 2, hi].map((v) => `<text x="${L - 6}" y="${y(v) + 4}" text-anchor="end">${mxNum(v, Math.abs(v) >= 1000 ? 0 : 2)}</text><line x1="${L}" x2="${W - R}" y1="${y(v)}" y2="${y(v)}" stroke="var(--line)"/>`).join("");
+  const years = []; let lastY = ""; pts.forEach((p, i) => { const yy = p[0].slice(0, 4); if (yy !== lastY) { years.push(`<text x="${x(i)}" y="${H - 6}" text-anchor="middle">${yy}</text>`); lastY = yy; } });
+  return `<svg class="mx-detail-svg" viewBox="0 0 ${W} ${H}" data-mx-pts='${escapeHtml(JSON.stringify(pts))}' data-mx-geo="${L},${R},${T},${B},${lo},${span}" preserveAspectRatio="none">${ticks}${years.join("")}<polyline fill="none" stroke="var(--primary)" stroke-width="1.6" points="${line}"/><line class="mx-cross" x1="0" x2="0" y1="${T}" y2="${H - B}" stroke="var(--muted)" stroke-dasharray="3 3" visibility="hidden"/></svg><p class="lab-foot mx-readout">グラフにカーソルを当てると、その週の終値を表示します。週足=各週の最後の終値(5年)。</p>`;
+}
+function bindMxDetail(box) {
+  const svg = box.querySelector(".mx-detail-svg"); if (!svg) return;
+  const pts = JSON.parse(svg.dataset.mxPts || "[]"); const [L, R] = svg.dataset.mxGeo.split(",").map(Number); const cross = svg.querySelector(".mx-cross"); const out = box.querySelector(".mx-readout");
+  svg.addEventListener("mousemove", (e) => { const rect = svg.getBoundingClientRect(); const fx = (e.clientX - rect.left) / rect.width * 900; const i = Math.max(0, Math.min(pts.length - 1, Math.round((fx - L) / (900 - L - R) * (pts.length - 1)))); const xx = L + i / (pts.length - 1) * (900 - L - R); cross.setAttribute("x1", xx); cross.setAttribute("x2", xx); cross.setAttribute("visibility", "visible"); out.textContent = `${pts[i][0]} の週: ${mxNum(pts[i][1], Math.abs(pts[i][1]) >= 1000 ? 0 : 3)}`; });
+}
+function mxAllItems() {
+  const m = state.macro || {}; const map = {};
+  (m.markets || []).forEach((s) => s.items.forEach((it) => { map[`mk:${it.sym}`] = it; }));
+  (m.commodities?.groups || []).forEach((g) => g.items.forEach((it) => { map[`cm:${it.sym}`] = it; }));
+  return map;
+}
+// ===== 経済指標・つながり(学習)タブ(2026-10-04 追加)=====================================
+// dist/data/econ.json(future-sight/scripts/export_econ.py)を読む。FRED・Yahoo の経済指標、Claude が拾った発表データ、
+// 簡易予測(AR1)、日本株の業種との先行・遅行の相関、景気・物価の局面、つながりの地図(ノード・辺・シナリオ)。すべて表示・学習用。
+const econState = { cat: "all", sel: null, node: null, scenario: null };
+let econLoading = null;
+async function loadEcon() {
+  if (state.econ) return state.econ;
+  if (!econLoading) econLoading = fetchJson("data/econ.json").then((d) => { state.econ = d; return d; }).catch(() => { state.econ = { error: true }; return state.econ; });
+  return econLoading;
+}
+const ecIsPctT = (it) => it && (it.transform === "yoy" || it.transform === "chg");
+function ecFmtLevel(v, it) {
+  const n = number(v); if (n === null) return "—";
+  const u = it?.unit || ""; const d = Math.abs(n) >= 1000 ? 0 : Math.abs(n) >= 10 ? 1 : 2;
+  const s = n.toLocaleString("ja-JP", { minimumFractionDigits: d, maximumFractionDigits: d });
+  return u === "%" || u === "%pt" ? `${s}${u}` : u && !["指数", "価格"].includes(u) ? `${s} <small>${escapeHtml(u)}</small>` : s;
+}
+function ecFmtT(v, it) {
+  const n = number(v); if (n === null) return "—";
+  if (ecIsPctT(it)) return mxPct(n, 1);
+  if (it?.transform === "diff") return `<span class="${n >= 0 ? "positive-text" : "negative-text"}">${n >= 0 ? "+" : ""}${mxNum(n, Math.abs(n) >= 100 ? 0 : 2)}</span>`;
+  return ecFmtLevel(n, it);
+}
+const ecArrow = (lbl) => lbl === "上昇" ? '<b class="positive-text">↑ 上昇</b>' : lbl === "低下" ? '<b class="negative-text">↓ 低下</b>' : lbl ? '<b class="muted-text">→ 横ばい</b>' : "";
+function ecChart(pts, it, fc) {
+  const P = (pts || []).filter((p) => number(p[1]) !== null); if (P.length < 3) return '<p class="lab-foot">履歴が足りません。</p>';
+  const ext = []; if (fc) ["h1", "h3"].forEach((k) => fc[k] && number(fc[k].v) !== null && ext.push([fc[k].date, fc[k].v, fc[k].lo, fc[k].hi]));
+  const W = 900, H = 250, L = 60, R = 44, T = 16, B = 26; const n = P.length + ext.length;
+  const vals = P.map((p) => number(p[1])).concat(ext.flatMap((e) => [number(e[2]), number(e[3])]).filter((x) => x !== null));
+  let lo = Math.min(...vals), hi = Math.max(...vals); if (lo > 0 && hi > 0 && it?.transform === "yoy") lo = Math.min(lo, 0); const span = hi - lo || 1;
+  const x = (i) => L + i / Math.max(1, n - 1) * (W - L - R); const y = (v) => T + (1 - (v - lo) / span) * (H - T - B);
+  const pct = ecIsPctT(it); const lab = (v) => pct ? `${(v * 100).toFixed(1)}%` : mxNum(v, Math.abs(v) >= 1000 ? 0 : 2);
+  const line = P.map((p, i) => `${x(i).toFixed(1)},${y(number(p[1])).toFixed(1)}`).join(" ");
+  const ticks = [lo, lo + span / 2, hi].map((v) => `<text x="${L - 6}" y="${y(v) + 4}" text-anchor="end">${lab(v)}</text><line x1="${L}" x2="${W - R}" y1="${y(v)}" y2="${y(v)}" stroke="var(--line)"/>`).join("");
+  const zero = lo < 0 && hi > 0 ? `<line x1="${L}" x2="${W - R}" y1="${y(0)}" y2="${y(0)}" stroke="var(--line-strong)" stroke-dasharray="3 3"/>` : "";
+  const xl = []; let last = ""; P.forEach((p, i) => { const k = String(p[0]).slice(0, 4); if (k !== last) { xl.push(`<text x="${x(i)}" y="${H - 6}" text-anchor="middle">${k}</text>`); last = k; } });
+  let fcSvg = "";
+  if (ext.length) {
+    const i0 = P.length - 1; const v0 = number(P[i0][1]);
+    const band = [[i0, v0, v0], ...ext.map((e, k) => [P.length + k, number(e[2]), number(e[3])])];
+    fcSvg = `<polygon points="${band.map((b) => `${x(b[0])},${y(b[2])}`).join(" ")} ${band.slice().reverse().map((b) => `${x(b[0])},${y(b[1])}`).join(" ")}" fill="color-mix(in srgb,var(--warning,#d98a00) 18%,transparent)"/>`
+      + `<polyline fill="none" stroke="var(--warning,#d98a00)" stroke-width="1.6" stroke-dasharray="5 4" points="${x(i0)},${y(v0)} ${ext.map((e, k) => `${x(P.length + k)},${y(number(e[1]))}`).join(" ")}"/>`
+      + ext.map((e, k) => `<circle cx="${x(P.length + k)}" cy="${y(number(e[1]))}" r="3" fill="var(--warning,#d98a00)"/><text x="${x(P.length + k)}" y="${y(number(e[1])) - 8}" text-anchor="middle">${escapeHtml(e[0] || "")}</text>`).join("");
+  }
+  return `<svg class="mx-detail-svg" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">${ticks}${zero}${xl.join("")}${fcSvg}<polyline fill="none" stroke="var(--primary)" stroke-width="1.7" points="${line}"/></svg>`;
+}
+function ecCard(it) {
+  if (!it.available) return `<article class="mx-card off ec-card" data-ec-sel="${escapeHtml(it.id)}" tabindex="0"><header><b>${escapeHtml(it.name)}</b><small>${escapeHtml(it.catLabel || "")}</small></header><p class="mx-na">未取得${it.source === "release" ? "(Claude の定期タスクが発表を拾うと表示)" : "(PC の scripts\\fetch_econ.py で取得)"}</p><small class="mx-jp">${escapeHtml(it.measures || "")}</small></article>`;
+  const pos = number(it.pct5); const fc = it.forecast;
+  return `<article class="mx-card ec-card ${econState.sel === it.id ? "sel" : ""}" data-ec-sel="${escapeHtml(it.id)}" tabindex="0" title="押すと解説・グラフ・予測・相関">
+    <header><b>${escapeHtml(it.name)}</b><small>${escapeHtml(it.catLabel || "")} · ${escapeHtml(it.date || "")}</small></header>
+    <div class="mx-val"><strong>${ecFmtLevel(it.last, it)}</strong>${it.tName ? `<span>${escapeHtml(it.tName)} ${ecFmtT(it.tLast, it)}</span>` : ""}</div>
+    <div class="mx-chg"><span>直近3期 ${ecArrow(it.trendLabel)}</span>${fc ? `<span>次回予測 ${ecFmtT(fc.h1.v, it)}</span>` : ""}${it.source === "release" ? '<span class="pill">発表データ</span>' : ""}</div>
+    ${mxSpark(it.spark, { w: 220, h: 36 })}
+    ${pos === null ? "" : `<div class="mx-range" title="過去5年の中の位置(変換後の値)"><i style="left:${Math.round(pos * 100)}%"></i></div><small class="mx-range-label">過去5年の ${Math.round(pos * 100)}% 地点${number(it.z5) !== null ? `(z ${mxNum(it.z5, 1)})` : ""}</small>`}
+  </article>`;
+}
+function ecDetail(e, it) {
+  if (!it) return "";
+  const fc = it.forecast; const ll = it.leadLag; const rel = it.lastRelease;
+  const src = it.source === "fred" ? `FRED ${escapeHtml(it.key)}` : it.source === "yahoo" ? `Yahoo ${escapeHtml(it.key)}` : "Claude が Web で拾った発表";
+  const node = (e.links?.nodes || []).find((n) => n.id === it.node);
+  const box = (t, v) => v ? `<div><b>${t}</b><p>${escapeHtml(v)}</p></div>` : "";
+  const llTable = ll?.top?.length ? `<div class="broker-table-wrap"><table class="broker-table mx-table left"><thead><tr><th>翌月の超過リターン(業種−TOPIX)</th><th>相関</th><th>n(月)</th><th>t値</th></tr></thead><tbody>${ll.top.map((x) => `<tr><th>${escapeHtml(x.sector)}</th><td class="${number(x.r) >= 0 ? "positive-text" : "negative-text"}">${mxNum(x.r, 2)}</td><td>${x.n}</td><td>${mxNum(x.t, 2)}</td></tr>`).join("")}${ll.nt ? `<tr><th>参考: 日経−TOPIX(NT)</th><td>${mxNum(ll.nt.r, 2)}</td><td>${ll.nt.n}</td><td>—</td></tr>` : ""}</tbody></table></div><p class="lab-foot">指標の月次の変化を公表の遅れ(${it.lagDays ?? 0}日)だけずらして「知り得た月」に置き、その翌月の業種別超過リターン(stockAI の銘柄の等ウェイト−TOPIX)との相関。${ll.nSectors}業種の中の上位なので、|t|が2前後でも偶然の可能性が高い(未検定・多重比較)。</p>` : '<p class="lab-foot">相関を測るには履歴(24か月以上)と stockAI の価格が要ります。</p>';
+  const fcBox = fc ? `<div class="read-box"><b>簡易予測(${escapeHtml(fc.model)} · φ=${mxNum(fc.phi, 2)})</b><p>次回(${escapeHtml(fc.h1.date || "")}): ${ecFmtT(fc.h1.v, it)}(68% の幅 ${ecFmtT(fc.h1.lo, it)} 〜 ${ecFmtT(fc.h1.hi, it)})/ 3期先(${escapeHtml(fc.h3.date || "")}): ${ecFmtT(fc.h3.v, it)}</p>${fc.skill ? `<p>直近${fc.skill.n}回の後ろ向き検証で、誤差は「前回の値のまま」の ${mxNum(fc.skill.maeRatio, 2)} 倍 → ${number(fc.skill.maeRatio) < 1 ? "素朴予測よりは良い" : "素朴予測に負けている(参考程度)"}。</p>` : ""}<p class="lab-foot">1変数の時系列モデルで、コンセンサスや他の指標は使っていない。発表直前は市場予想(コンセンサス)と比べること。</p></div>` : "";
+  const relBox = rel ? `<div class="read-box"><b>最新の発表(${escapeHtml(rel.period || "")})</b><p>結果 ${escapeHtml(rel.value ?? "—")}${escapeHtml(rel.unit || "")} · 前回 ${escapeHtml(rel.prior ?? "—")} · 予想 ${escapeHtml(rel.consensus ?? "—")} · 発表 ${escapeHtml(rel.released_at || "—")}</p>${rel.note ? `<p>${escapeHtml(rel.note)}</p>` : ""}${rel.source_url ? `<p><a href="${escapeHtml(rel.source_url)}" target="_blank" rel="noopener">出典を開く ↗</a></p>` : ""}</div>` : "";
+  const pts = it.tSeries?.length >= 6 && it.transform !== "level" ? it.tSeries : (it.freq === "M" || it.freq === "Q") ? it.tSeries : it.levelSeries;
+  return `<section class="panel lab-section" id="ecDetail"><div class="section-title"><div><span>${escapeHtml(it.name)}</span><small>${src} · ${escapeHtml(it.catLabel || "")} · ${escapeHtml(it.release || "")}${it.revised ? ` · 改定 ${it.revised} 件を記録` : ""}</small></div><button type="button" class="text-button" data-ec-sel="${escapeHtml(it.id)}">閉じる ×</button></div>
+    ${it.available ? `<div class="mx-groups"><article><span>最新(${escapeHtml(it.date || "")})</span><strong>${ecFmtLevel(it.last, it)}</strong><small>前回 ${ecFmtLevel(it.prior, it)}</small></article>${it.tName ? `<article><span>${escapeHtml(it.tName)}</span><strong>${ecFmtT(it.tLast, it)}</strong><small>直近3期 ${ecArrow(it.trendLabel)}</small></article>` : ""}<article><span>過去5年の中の位置</span><strong>${number(it.pct5) === null ? "—" : Math.round(it.pct5 * 100) + "%"}</strong><small>z ${mxNum(it.z5, 2)}</small></article></div>
+    <h3 class="mx-h3">${it.tName && it.transform !== "level" ? escapeHtml(it.tName) : "水準"}の推移${fc ? "と簡易予測(点線・帯=68%)" : ""}</h3>${ecChart(pts, pts === it.levelSeries ? { ...it, transform: "level" } : it, pts === it.levelSeries ? null : fc)}` : '<p class="lab-foot">まだ値がありません。下の解説は読めます。</p>'}
+    ${it.comment ? `<div class="read-box"><b>活用コメント(自動生成)</b><p>${escapeHtml(it.comment)}</p></div>` : ""}
+    ${it.claude ? `<div class="read-box"><b>Claude のコメント</b><p>${escapeHtml(it.claude)}</p></div>` : ""}
+    ${relBox}${fcBox}
+    <div class="ec-learn">${box("何を測るデータか", it.measures)}${box("なぜ株に効くか", it.why)}${box("上がると(一般論)", it.readUp)}${box("下がると(一般論)", it.readDown)}${box("関係する日本株", it.jp)}${box("落とし穴", it.pitfalls)}</div>
+    ${node ? `<p class="lab-foot">つながりの地図では「${escapeHtml(node.label)}」の一部。<button type="button" class="link-button" data-ec-node="${escapeHtml(node.id)}">地図で見る ›</button></p>` : ""}
+    <h3 class="mx-h3">日本株の業種との先行・遅行の相関(stockAI で計測)</h3>${llTable}</section>`;
+}
+function mxEcon() {
+  const e = state.econ; if (!e) { loadEcon().then(renderMacroPage); return '<div class="empty-state"><p>読込中…</p></div>'; }
+  if (e.error) return '<div class="empty-state"><strong>econ.json を読めませんでした</strong><p>python future-sight\\scripts\\export_econ.py で作れます(取得は python scripts\\fetch_econ.py)。</p></div>';
+  const items = e.series || []; const cats = e.categories || {};
+  const counts = {}; items.forEach((it) => { counts[it.cat] = (counts[it.cat] || 0) + 1; });
+  const nAvail = items.filter((it) => it.available).length;
+  const list = items.filter((it) => econState.cat === "all" || it.cat === econState.cat || (econState.cat === "release" && it.source === "release"));
+  list.sort((a, b) => (b.available ? 1 : 0) - (a.available ? 1 : 0));
+  const rg = e.regime || {};
+  const bar = (v) => { const n = number(v); if (n === null) return "—"; const w = Math.min(50, Math.abs(n) * 25); return `<span class="ec-bar"><i class="${n >= 0 ? "pos" : "neg"}" style="${n >= 0 ? "left:50%" : `left:${50 - w}%`};width:${w}%"></i></span> ${mxNum(n, 2)}`; };
+  const regBox = rg.quadrant ? `<div class="mx-groups"><article><span>局面(4象限)</span><strong>${escapeHtml(rg.quadrant)}</strong><small>${escapeHtml(rg.tilt || "")}</small></article><article><span>成長の勢い</span><strong>${bar(rg.growth)}</strong><small>${(rg.growthParts || []).map((p) => `${escapeHtml(p[1])} ${mxNum(p[2], 1)}`).join(" · ")}</small></article><article><span>物価の勢い</span><strong>${bar(rg.inflation)}</strong><small>${(rg.inflationParts || []).map((p) => `${escapeHtml(p[1])} ${mxNum(p[2], 1)}`).join(" · ")}</small></article></div><p class="lab-foot">${escapeHtml(rg.method || "")}</p>` : '<p class="lab-foot">景気・物価の系列がまだ揃っていません(PC で scripts\\fetch_econ.py を実行すると出ます)。</p>';
+  const notes = e.notes || {};
+  const up = (notes.upcoming || []).length ? `<ul class="mx-list">${notes.upcoming.map((u) => `<li><b>${escapeHtml(u.date || "")}</b> ${escapeHtml(u.name || "")}${u.why ? ` — <small>${escapeHtml(u.why)}</small>` : ""}</li>`).join("")}</ul>` : '<p class="lab-foot">Claude の定期タスクが「今後の発表予定」を書くとここに出ます。</p>';
+  const rels = e.releases || [];
+  const relTable = rels.length ? `<div class="broker-table-wrap"><table class="broker-table mx-table left"><thead><tr><th>データ</th><th>対象期間</th><th>結果</th><th>前回</th><th>予想</th><th>発表</th><th>出典</th></tr></thead><tbody>${rels.slice(0, 25).map((x) => `<tr data-ec-sel="${escapeHtml(x.series_id)}"><th>${escapeHtml((items.find((i) => i.id === x.series_id) || {}).name || x.name || x.series_id)}</th><td>${escapeHtml(x.period || "")}</td><td><b>${escapeHtml(x.value ?? "—")}</b>${escapeHtml(x.unit || "")}</td><td>${escapeHtml(x.prior ?? "—")}</td><td>${escapeHtml(x.consensus ?? "—")}</td><td>${escapeHtml(x.released_at || "")}</td><td>${x.source_url ? `<a href="${escapeHtml(x.source_url)}" target="_blank" rel="noopener">↗</a>` : ""}</td></tr>`).join("")}</tbody></table></div>` : '<p class="lab-foot">まだありません。朝・引け後の Claude の定期タスクが、韓国の輸出・TSMC 月次売上・SEAJ・JEITA・工作機械受注・DRAM 価格・ISM・PMI・不動産の統計などを Web で拾って claude_ls/out/releases.csv に記録すると出ます。</p>';
+  const failed = (e.fetchReport?.series || []).filter((s) => !s.ok).map((s) => s.id);
+  const sel = items.find((it) => it.id === econState.sel);
+  const catBtns = [["all", `すべて ${items.length}`], ["release", "発表データ"], ...Object.entries(cats).filter(([k]) => counts[k]).map(([k, l]) => [k, `${l} ${counts[k]}`])];
+  return `${mxSection("景気・物価の局面", "米国中心の景気・物価データの勢いから", regBox, "REGIME")}
+    ${notes.overview ? mxSection("Claude の全体コメント", escapeHtml(notes.generatedAt || ""), `<p class="mx-report">${escapeHtml(notes.overview)}</p>`, "CLAUDE") : ""}
+    <div class="lab-grid even">${mxSection("最近の発表(Claude が拾ったもの)", `${rels.length}件`, relTable, "RELEASES")}${mxSection("今後の発表予定", "", up, "CALENDAR")}</div>
+    ${sel ? ecDetail(e, sel) : ""}
+    ${mxSection("経済指標", `${nAvail}/${items.length} 系列に値あり · 書き出し ${escapeHtml(fmtTime(e.generatedAt))}${e.fetchReport ? ` · 取得 ${escapeHtml(fmtTime(e.fetchReport.fetchedAt))}` : " · 未取得(PC で scripts\\fetch_econ.py)"}${failed.length ? ` · ⚠ 取れなかった: ${escapeHtml(failed.join(", "))}` : ""}`, `<div class="mx-ctrl"><div class="broker-seg wide">${catBtns.map(([k, l]) => `<button type="button" data-ec-cat="${k}" class="${econState.cat === k ? "active" : ""}">${escapeHtml(l)}</button>`).join("")}</div></div><div class="mx-grid">${list.map(ecCard).join("")}</div><p class="lab-foot">カードを押すと、解説(何を測るか・なぜ効くか・読み方・落とし穴)・推移・簡易予測・業種との相関・活用コメントが上に出ます。</p>`, "DATA")}
+    <div class="read-box muted"><b>注意</b>${(e.caveats || []).map((c) => `<p>${escapeHtml(c)}</p>`).join("")}</div>`;
+}
+// ---- つながりの地図 ----
+function ecMapSvg(e) {
+  const L = e.links || {}; const layers = L.layers || []; const nodes = L.nodes || []; const edges = L.edges || [];
+  const colW = 196, boxW = 158, boxH = 42, gapY = 12, top = 34;
+  const byLayer = {}; nodes.forEach((n) => (byLayer[n.layer] = byLayer[n.layer] || []).push(n));
+  const pos = {}; let maxN = 0;
+  layers.forEach((ly, li) => { const arr = byLayer[ly.id] || []; maxN = Math.max(maxN, arr.length); arr.forEach((n, k) => { pos[n.id] = { x: 12 + li * colW, y: top + k * (boxH + gapY) }; }); });
+  const W = 12 + layers.length * colW, H = top + maxN * (boxH + gapY) + 10;
+  const scn = (L.scenarios || []).find((s) => s.id === econState.scenario); const inPath = new Set(scn ? scn.path : []);
+  const focus = econState.node; const hot = (ed) => scn ? inPath.has(ed.src) && inPath.has(ed.dst) : focus ? ed.src === focus || ed.dst === focus : false;
+  const anyHot = !!(scn || focus);
+  const paths = edges.map((ed) => {
+    const a = pos[ed.src], b = pos[ed.dst]; if (!a || !b) return "";
+    let d;
+    if (b.x > a.x) { const x1 = a.x + boxW, y1 = a.y + boxH / 2, x2 = b.x, y2 = b.y + boxH / 2; const dx = Math.max(30, (x2 - x1) / 2); d = `M${x1},${y1} C${x1 + dx},${y1} ${x2 - dx},${y2} ${x2},${y2}`; }
+    else if (b.x === a.x) { const x1 = a.x + boxW, y1 = a.y + boxH / 2 + 6, x2 = b.x + boxW, y2 = b.y + boxH / 2 - 6; const bend = 22 + Math.min(40, Math.abs(y2 - y1) / 6); d = `M${x1},${y1} C${x1 + bend},${y1} ${x2 + bend},${y2} ${x2 + 2},${y2}`; }
+    else { const x1 = a.x, y1 = a.y + boxH / 2, x2 = b.x + boxW, y2 = b.y + boxH / 2; d = `M${x1},${y1} C${x1 - 40},${y1 - 30} ${x2 + 40},${y2 - 30} ${x2},${y2}`; }
+    const h = hot(ed); const col = ed.sign === "-" ? "var(--negative)" : "var(--positive)";
+    return `<path d="${d}" fill="none" stroke="${col}" stroke-width="${h ? 2.4 : 1.1}" stroke-opacity="${anyHot ? (h ? 0.95 : 0.08) : 0.35}" ${ed.sign === "-" ? 'stroke-dasharray="5 3"' : ""} marker-end="url(#ecArrow${ed.sign === "-" ? "N" : "P"})"><title>${escapeHtml(ed.src)} → ${escapeHtml(ed.dst)}(${ed.sign === "-" ? "逆向き" : "同じ向き"}・${escapeHtml(ed.lag || "")}): ${escapeHtml(ed.mech || "")}</title></path>`;
+  }).join("");
+  const boxes = nodes.map((n) => {
+    const p = pos[n.id]; if (!p) return ""; const st = n.status; const on = !anyHot || (scn ? inPath.has(n.id) : focus === n.id || edges.some((ed) => (ed.src === focus && ed.dst === n.id) || (ed.dst === focus && ed.src === n.id)));
+    const dir = st?.dir === "up" ? "↑" : st?.dir === "down" ? "↓" : st ? "→" : ""; const dcol = st?.dir === "up" ? "var(--positive)" : st?.dir === "down" ? "var(--negative)" : "var(--muted)";
+    return `<g class="ec-node ${econState.node === n.id ? "sel" : ""}" data-ec-node="${escapeHtml(n.id)}" tabindex="0" opacity="${on ? 1 : 0.28}"><rect x="${p.x}" y="${p.y}" width="${boxW}" height="${boxH}" rx="9"/><text x="${p.x + 9}" y="${p.y + 17}" class="ec-node-t">${escapeHtml(n.label.length > 13 ? n.label.slice(0, 13) + "…" : n.label)}</text>${st ? `<text x="${p.x + 9}" y="${p.y + 33}" class="ec-node-s">${escapeHtml(String(st.proxyName || "").slice(0, 12))} <tspan fill="${dcol}">${dir}</tspan>${number(st.z) !== null ? ` z${mxNum(st.z, 1)}` : ""}</text>` : `<text x="${p.x + 9}" y="${p.y + 33}" class="ec-node-s">${n.layer === "equity" ? "日本株" : "代理指標なし"}</text>`}<title>${escapeHtml(n.label)}: ${escapeHtml(n.what || "")}</title></g>`;
+  }).join("");
+  const heads = layers.map((ly, li) => `<text x="${12 + li * colW + boxW / 2}" y="18" text-anchor="middle" class="ec-layer">${escapeHtml(ly.label)}</text>`).join("");
+  return `<div class="ec-map-wrap"><svg class="ec-map" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" role="img" aria-label="市場のつながりの地図"><defs><marker id="ecArrowP" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L8,4 L0,8z" fill="var(--positive)"/></marker><marker id="ecArrowN" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L8,4 L0,8z" fill="var(--negative)"/></marker></defs>${heads}${paths}${boxes}</svg></div>`;
+}
+function ecNodePanel(e, n) {
+  const L = e.links || {}; const items = e.series || []; const byId = Object.fromEntries((L.nodes || []).map((x) => [x.id, x]));
+  const ins = (L.edges || []).filter((ed) => ed.dst === n.id), outs = (L.edges || []).filter((ed) => ed.src === n.id);
+  const eRow = (ed, other) => `<li><span class="${ed.sign === "-" ? "negative-text" : "positive-text"}">${ed.sign === "-" ? "逆向き(−)" : "同じ向き(+)"}</span> <button type="button" class="link-button" data-ec-node="${escapeHtml(other)}">${escapeHtml(byId[other]?.label || other)}</button> <small>時間差 ${escapeHtml(ed.lag || "")} · ${escapeHtml(ed.evidence || "")}</small><br><small>${escapeHtml(ed.mech || "")}</small></li>`;
+  const ser = (n.series || []).map((id) => items.find((i) => i.id === id)).filter(Boolean);
+  const st = n.status;
+  const box = (t, v) => v ? `<div><b>${t}</b><p>${escapeHtml(v)}</p></div>` : "";
+  return `<section class="panel lab-section" id="ecNode"><div class="section-title"><div><span>${escapeHtml(n.label)}</span><small>${escapeHtml((L.layers || []).find((l) => l.id === n.layer)?.label || "")}</small></div><button type="button" class="text-button" data-ec-node="${escapeHtml(n.id)}">閉じる ×</button></div>
+    ${st ? `<div class="mx-groups"><article><span>代理指標: ${escapeHtml(st.proxyName || st.proxy)}</span><strong>${st.dir === "up" ? '<span class="positive-text">↑ 上向き</span>' : st.dir === "down" ? '<span class="negative-text">↓ 下向き</span>' : "→ 横ばい"}</strong><small>過去5年の z ${mxNum(st.z, 2)} · ${escapeHtml(st.date || "")}</small></article><article><span>推移</span>${mxSpark(st.spark, { w: 220, h: 40 })}</article></div>` : ""}
+    <div class="ec-learn">${box("これは何か", n.what)}${box("なぜ大事か", n.why)}${box("読み方", n.read)}${box("落とし穴", n.pitfalls)}</div>
+    ${n.claude ? `<div class="read-box"><b>Claude のコメント</b><p>${escapeHtml(n.claude)}</p></div>` : ""}
+    ${ser.length ? `<h3 class="mx-h3">このノードのデータ</h3><div>${ser.map((i) => `<button type="button" class="mx-chip" data-ec-go="${escapeHtml(i.id)}">${escapeHtml(i.name)} ${i.available ? ecFmtT(i.tLast ?? i.last, i) : "<small>未取得</small>"}</button>`).join(" ")}</div>` : ""}
+    ${(n.codes || []).length ? `<h3 class="mx-h3">関係する銘柄</h3><div>${n.codes.map((c) => `<button type="button" class="mx-chip" data-mx-stock="${escapeHtml(c)}">${escapeHtml(c)}</button>`).join(" ")}</div>` : ""}
+    <div class="lab-grid even"><div><h3 class="mx-h3">影響を受ける(入ってくる矢印)</h3><ul class="mx-list">${ins.map((ed) => eRow(ed, ed.src)).join("") || "<li>なし</li>"}</ul></div><div><h3 class="mx-h3">影響を与える(出ていく矢印)</h3><ul class="mx-list">${outs.map((ed) => eRow(ed, ed.dst)).join("") || "<li>なし</li>"}</ul></div></div></section>`;
+}
+function mxLinks() {
+  const e = state.econ; if (!e) { loadEcon().then(renderMacroPage); return '<div class="empty-state"><p>読込中…</p></div>'; }
+  if (e.error) return '<div class="empty-state"><strong>econ.json を読めませんでした</strong></div>';
+  const L = e.links || {}; const scn = (L.scenarios || []).find((s) => s.id === econState.scenario); const items = e.series || [];
+  const n = (L.nodes || []).find((x) => x.id === econState.node);
+  const byId = Object.fromEntries((L.nodes || []).map((x) => [x.id, x]));
+  const scnBox = scn ? `<div class="read-box"><b>シナリオ: ${escapeHtml(scn.label)}</b><p>${escapeHtml(scn.story)}</p><p class="ec-path">${scn.path.map((p) => `<button type="button" class="mx-chip" data-ec-node="${escapeHtml(p)}">${escapeHtml(byId[p]?.label || p)}</button>`).join(" → ")}</p><p><b>見るべきデータ:</b> ${scn.watch.map((w) => { const it = items.find((i) => i.id === w); return it ? `<button type="button" class="mx-chip" data-ec-go="${escapeHtml(w)}">${escapeHtml(it.name)} ${it.available ? ecFmtT(it.tLast ?? it.last, it) : "<small>未取得</small>"}</button>` : `<span class="mx-chip">${escapeHtml(w)}</span>`; }).join(" ")}</p><p><b>まとめ(一般論):</b> ${escapeHtml(scn.take)}</p></div>` : "";
+  const guide = `<div class="ec-learn"><div><b>1. 上流から下流へ</b><p>左の「政策・流動性」が「金利・為替・信用」を動かし、それが「景気・物価」と「業種サイクル・商品」を通って、右端の「日本株」に届きます。株価は途中の段より先に動く(期待で先回りする)ことが多い点に注意。</p></div><div><b>2. 矢印の色</b><p>緑の実線=同じ向き(上がれば上がる)、赤の点線=逆向き(上がれば下がる)。矢印に触れると、仕組みと時間差が出ます。</p></div><div><b>3. 箱の右の ↑↓</b><p>そのノードの代理指標が直近で上向きか下向きか(過去5年の z つき)。今どの経路が動いているかの目安です。</p></div><div><b>4. シナリオ</b><p>上のボタンで「米金利上昇」などのショックを選ぶと、波及する経路が光り、見るべきデータと一般論のまとめが出ます。</p></div></div>`;
+  return `${mxSection("つながりの地図", "政策 → 金利・為替 → 景気 → 業種 → 日本株。箱を押すと解説、シナリオを選ぶと波及経路が光ります", `<div class="mx-ctrl"><div class="broker-seg wide"><button type="button" data-ec-scn="" class="${!econState.scenario ? "active" : ""}">シナリオなし</button>${(L.scenarios || []).map((s) => `<button type="button" data-ec-scn="${escapeHtml(s.id)}" class="${econState.scenario === s.id ? "active" : ""}">${escapeHtml(s.label)}</button>`).join("")}</div></div>${scnBox}${ecMapSvg(e)}<p class="lab-foot">横にスクロールできます。辺は教科書・市場で広く言われる「一般論」で、このリポジトリでは検証していません。実際の相関は「経済指標」タブの各カードで stockAI の価格から測っています。</p>`, "MAP")}
+    ${n ? ecNodePanel(e, n) : ""}
+    ${mxSection("地図の読み方(学習)", "", guide, "GUIDE")}`;
+}
+function bindEcon(body) {
+  body.querySelectorAll("[data-ec-cat]").forEach((el) => el.addEventListener("click", () => { econState.cat = el.dataset.ecCat; renderMacroPage(); }));
+  body.querySelectorAll("[data-ec-sel]").forEach((el) => { const go = () => { econState.sel = econState.sel === el.dataset.ecSel ? null : el.dataset.ecSel; renderMacroPage(); $("#ecDetail")?.scrollIntoView({ behavior: "smooth", block: "start" }); }; el.addEventListener("click", go); el.addEventListener("keydown", (ev) => { if (ev.key === "Enter") go(); }); });
+  body.querySelectorAll("[data-ec-node]").forEach((el) => { const go = () => { const id = el.dataset.ecNode; econState.node = econState.node === id && macroState.tab === "links" ? null : id; macroState.tab = "links"; renderMacroPage(); $("#ecNode")?.scrollIntoView({ behavior: "smooth", block: "start" }); }; el.addEventListener("click", go); el.addEventListener("keydown", (ev) => { if (ev.key === "Enter") go(); }); });
+  body.querySelectorAll("[data-ec-scn]").forEach((el) => el.addEventListener("click", () => { econState.scenario = el.dataset.ecScn || null; econState.node = null; renderMacroPage(); }));
+  body.querySelectorAll("[data-ec-go]").forEach((el) => el.addEventListener("click", () => { econState.sel = el.dataset.ecGo; econState.cat = "all"; macroState.tab = "econ"; renderMacroPage(); $("#ecDetail")?.scrollIntoView({ behavior: "smooth", block: "start" }); }));
+}
+function renderMacroPage() {
+  const page = $('[data-page="macro"]'); if (!page) return;
+  $("#macroTabs").innerHTML = MACRO_TABS.map(([k, label]) => `<button type="button" data-mx-tab="${k}" class="${macroState.tab === k ? "active" : ""}">${label}</button>`).join("");
+  $$("[data-mx-tab]").forEach((b) => b.addEventListener("click", () => { macroState.tab = b.dataset.mxTab; macroState.detail = null; try { localStorage.setItem("future-sight-macro-tab", macroState.tab); } catch { /* */ } renderMacroPage(); }));
+  const body = $("#macroBody");
+  if (!state.macro) { body.innerHTML = '<div class="empty-state"><p>読込中…</p></div>'; loadMacro().then(renderMacroPage); return; }
+  const m = state.macro;
+  if (m.error) { body.innerHTML = '<div class="empty-state"><strong>macro.json を読めませんでした</strong><p>python future-sight\\scripts\\export_macro.py で作れます。</p></div>'; $("#macroBadge").textContent = "未生成"; return; }
+  $("#macroBadge").textContent = `書き出し ${fmtTime(m.generatedAt)}`;
+  const fn = { overview: mxOverview, econ: mxEcon, links: mxLinks, us: mxUs, markets: mxMarkets, commod: mxCommod, trade: mxTrade, iip: mxIip, ls: mxLs, reports: mxReports }[macroState.tab] || mxOverview;
+  body.innerHTML = fn(m);
+  body.querySelectorAll("[data-mx-detail]").forEach((el) => { const open = () => { macroState.detail = macroState.detail === el.dataset.mxDetail ? null : el.dataset.mxDetail; renderMacroPage(); $("#mxDetail")?.scrollIntoView({ behavior: "smooth", block: "nearest" }); }; el.addEventListener("click", open); el.addEventListener("keydown", (e) => { if (e.key === "Enter") open(); }); });
+  body.querySelectorAll("[data-mx-stock]").forEach((el) => el.addEventListener("click", (e) => { e.stopPropagation(); goStock(el.dataset.mxStock); }));
+  body.querySelectorAll("[data-mx-go]").forEach((el) => el.addEventListener("click", () => { macroState.tab = el.dataset.mxGo; renderMacroPage(); window.scrollTo({ top: 0 }); }));
+  body.querySelectorAll("[data-mx-flow]").forEach((el) => el.addEventListener("click", () => { macroState.tradeFlow = el.dataset.mxFlow; macroState.tradeItem = null; renderMacroPage(); }));
+  body.querySelectorAll("[data-mx-area]").forEach((el) => el.addEventListener("click", () => { macroState.tradeArea = el.dataset.mxArea; renderMacroPage(); }));
+  body.querySelectorAll("[data-mx-item]").forEach((el) => el.addEventListener("click", () => { macroState.tradeItem = macroState.tradeItem === el.dataset.mxItem ? null : el.dataset.mxItem; renderMacroPage(); $("#mxItemAreas")?.scrollIntoView({ behavior: "smooth", block: "nearest" }); }));
+  body.querySelectorAll("[data-mx-ls]").forEach((el) => el.addEventListener("click", () => { macroState.lsView = el.dataset.mxLs; renderMacroPage(); }));
+  body.querySelectorAll("[data-mx-report]").forEach((el) => el.addEventListener("click", () => { macroState.reportIdx = Number(el.dataset.mxReport); renderMacroPage(); }));
+  bindEcon(body);
+  const det = $("#mxDetail"); if (det) bindMxDetail(det);
+}
+function mxDetailBlock(keys) {
+  if (!macroState.detail || !keys.includes(macroState.detail)) return "";
+  const it = mxAllItems()[macroState.detail]; if (!it) return "";
+  return `<section class="panel lab-section" id="mxDetail"><div class="section-title"><div><span>${escapeHtml(it.name)}(${escapeHtml(it.sym)})</span><small>5年の週足 · 最終 ${escapeHtml(it.date || "")} · ${it.unit ? escapeHtml(it.unit) : ""}</small></div><button type="button" class="text-button" data-mx-detail="${escapeHtml(macroState.detail)}">閉じる ×</button></div>${mxDetailChart(it)}</section>`;
+}
+function mxSection(title, sub, inner, em = "") { return `<section class="panel lab-section"><div class="section-title"><div><span>${title}</span>${sub ? `<small>${sub}</small>` : ""}</div>${em ? `<em>${em}</em>` : ""}</div>${inner}</section>`; }
+
+function mxOverview(m) {
+  const items = mxAllItems(); const pick = (k) => items[k];
+  const kpi = (k, label) => { const it = pick(k); if (!it?.available) return `<article><span>${label}</span><strong>—</strong><small>未取得</small></article>`; return `<article data-mx-detail="${k}" class="mx-kpi"><span>${label}</span><strong>${mxNum(it.last, it.isRatio ? 3 : Math.abs(it.last) >= 1000 ? 0 : 2)}</strong><small>1日 ${mxPct(it.chg1)} · 20日 ${mxPct(it.chg20)}</small></article>`; };
+  const kpis = [["mk:^VIX", "VIX"], ["mk:VIX/VIX3M", "VIX÷VIX3M"], ["mk:^MOVE", "MOVE(債券ボラ)"], ["mk:^TNX", "米10年債利回り"], ["mk:JPY=X", "ドル円"], ["mk:NT", "NT倍率"], ["mk:^SOX", "SOX"], ["mk:NKVI", "日経平均VI"], ["cm:CL=F", "WTI原油"], ["mk:WTI_JPY", "円建てWTI"], ["cm:HG=F", "銅"], ["cm:GC=F", "金"]];
+  const keys = kpis.map(([k]) => k);
+  const us = m.usOvernight; const usBox = us ? `<div class="mx-groups">${Object.entries(us.groups || {}).map(([k, g]) => `<article><span>${escapeHtml(g.label)}</span><strong>${mxPct(g.median)}</strong><small>上昇 ${g.up}/${g.n}(中央値)</small></article>`).join("")}</div><p class="lab-foot">米国 ${escapeHtml(us.session || "")} のセッション(取得 ${escapeHtml(fmtTime(us.generatedAt))})。この値動きは模型(米国は1日遅れで入る)にも日本の前日終値にも入っていない。<button type="button" class="link-button" data-mx-go="us">銘柄と日本株への波及 ›</button></p>` : '<p class="lab-foot">米国の引け後データ(output/us_overnight.json)がまだありません。</p>';
+  const t = m.trade; let tradeBox = '<p class="lab-foot">貿易統計はまだ取得していません(夕方のチェーンで scripts\\fetch_trade.py)。</p>';
+  if (t?.available) {
+    const ex = t.blocks?.export?.WORLD?.[0], im = t.blocks?.import?.WORLD?.[0]; const n = t.months.length - 1;
+    const bal = (ex?.values?.[n] ?? null) !== null && (im?.values?.[n] ?? null) !== null ? ex.values[n] - im.values[n] : null;
+    tradeBox = `<div class="mx-groups"><article><span>輸出(${escapeHtml(t.months[n])})</span><strong>${mxOku(ex?.values?.[n])}</strong><small>前年比 ${mxPct(ex?.yoy)}</small></article><article><span>輸入</span><strong>${mxOku(im?.values?.[n])}</strong><small>前年比 ${mxPct(im?.yoy)}</small></article><article><span>収支</span><strong class="${(bal ?? 0) >= 0 ? "positive-text" : "negative-text"}">${mxOku(bal)}</strong><small>輸出−輸入</small></article></div><p class="lab-foot"><button type="button" class="link-button" data-mx-go="trade">品目別・地域別 ›</button></p>`;
+  }
+  const ls = m.lsScreen; let lsBox = '<p class="lab-foot">強弱スクリーンの結果(claude_ls/out/ls_*.csv)がまだありません。</p>';
+  if (ls?.rows?.length) {
+    const big = mxBig(ls.rows).sort((a, b) => b.score - a.score);
+    const li = (r) => `<li><button type="button" class="link-button" data-mx-stock="${escapeHtml(r.code)}">${escapeHtml(r.code)} ${escapeHtml(r.name)}</button> <small>スコア ${mxNum(r.score, 2)} · 20日対日経 ${percent(r.ex20, 1)}</small></li>`;
+    lsBox = `<div class="mx-two"><div><b class="positive-text">強い側(売買代金上位100)</b><ol>${big.slice(0, 5).map(li).join("")}</ol></div><div><b class="negative-text">弱い側</b><ol>${big.slice(-5).reverse().map(li).join("")}</ol></div></div><p class="lab-foot">基準日 ${escapeHtml(ls.asof)}。${escapeHtml(ls.caution)} <button type="button" class="link-button" data-mx-go="ls">全体 ›</button></p>`;
+  }
+  const sj = m.shinyoJpx; const sjBox = sj ? `<div class="read-box ${sj.errors ? "muted" : ""}"><b>信用残(JPX 日次)</b><p>${sj.errors ? `⚠ 直近の取得で ${sj.files} 本中 ${sj.errors} 本が失敗: ${escapeHtml(sj.lastError || "")}` : `${sj.files} 本を取得(${escapeHtml((sj.dates || []).join(", "))})`}(${escapeHtml(sj.runAt || "")})</p></div>` : "";
+  const rep = (m.reports || []).find((r) => r.kind === "report");
+  return `<div class="model-kpis mx-kpis">${kpis.map(([k, l]) => kpi(k, l)).join("")}</div>${mxDetailBlock(keys)}
+    ${mxSection("米国の引け(前夜)", "グループ別の中央値", usBox, "US CLOSE")}
+    <div class="lab-grid even">${mxSection("貿易統計(財務省)", "世界の輸出入・最新月", tradeBox, "TRADE")}${mxSection("Claude の強弱スクリーン", "押しの浅さ・対日経・米国関連・ライン", lsBox, "L/S")}</div>
+    ${sjBox}
+    ${rep ? mxSection("最新の Claude レポート", escapeHtml(rep.file), `<p class="lab-foot">${escapeHtml((rep.md.split("\n")[0] || "").replace(/^#\s*/, ""))} <button type="button" class="link-button" data-mx-go="reports">読む ›</button></p>`, "REPORT") : ""}
+    <p class="lab-foot">このページの数値はすべて表示用で、株価予測の模型(CURRENT / GBM / DNN)の入力ではありません(VIX など一部の系列は別途マクロ塔として模型に入っています)。</p>`;
+}
+
+function mxUs(m) {
+  const us = m.usOvernight; if (!us) return '<div class="empty-state"><strong>米国の引け後データがありません</strong><p>朝のチェーン(scripts\\fetch_us_close.py)で作られます。</p></div>';
+  const groups = {}; (us.rows || []).forEach((r) => (groups[r.group] = groups[r.group] || []).push(r));
+  const label = (k) => us.groups?.[k]?.label || k;
+  const table = Object.entries(groups).map(([g, rows]) => `<h3 class="mx-h3">${escapeHtml(label(g))} <small>中央値 ${mxPct(us.groups?.[g]?.median)} · 上昇 ${us.groups?.[g]?.up ?? "—"}/${us.groups?.[g]?.n ?? "—"}</small></h3><div class="broker-table-wrap"><table class="broker-table mx-table"><thead><tr><th>銘柄</th><th>終値</th><th>前日比</th><th>寄り(ギャップ)</th><th>安値〜高値</th><th>引けの位置</th><th>出来高/20日</th><th>5日</th><th>20日</th><th>メモ</th></tr></thead><tbody>${rows.sort((a, b) => b.ret1 - a.ret1).map((r) => `<tr><th>${escapeHtml(r.ticker)}${r.stale ? ' <span class="pill warning">古い</span>' : ""}</th><td>${mxNum(r.close, 2)}</td><td>${mxPct(r.ret1, 2)}</td><td>${mxPct(r.gap, 2)}</td><td><small>${percent(r.lowRet, 1)}〜${percent(r.highRet, 1)}</small></td><td>${r.clv == null ? "—" : Math.round(r.clv * 100) + "%"}</td><td>${r.volRatio == null ? "—" : mxNum(r.volRatio, 2) + "倍"}</td><td>${mxPct(r.ret5)}</td><td>${mxPct(r.ret20)}</td><td>${(r.flags || []).map((f) => `<span class="pill ${/安|押し戻し/.test(f) ? "negative" : "positive"}">${escapeHtml(f)}</span>`).join(" ")}</td></tr>`).join("")}</tbody></table></div>`).join("");
+  const jp = (us.jp || []).slice(0, 60);
+  const jpTable = jp.length ? `<div class="broker-table-wrap"><table class="broker-table mx-table left"><thead><tr><th>日本株</th><th>関係する米国銘柄の平均</th><th>米国銘柄(前日比・関係の種類・根拠)</th></tr></thead><tbody>${jp.map((j) => `<tr><th><button type="button" class="link-button" data-mx-stock="${escapeHtml(j.code)}">${escapeHtml(j.code)} ${escapeHtml(j.name || "")}</button></th><td>${mxPct(j.avg, 2)}</td><td>${j.us.map((u) => `<span class="mx-chip">${escapeHtml(u.ticker)} ${mxPct(u.ret1, 1)}<small>${escapeHtml(u.type || "")}·${escapeHtml(u.evidence || "")}</small></span>`).join(" ")}</td></tr>`).join("")}</tbody></table></div><p class="lab-foot">関係は config/relations.json の辺(disclosed=開示 / reported=報道 / assumed=推定)。並びは平均の値動きの大きい順。辺が無い組は出していない。</p>` : "";
+  return `${mxSection(`米国 ${escapeHtml(us.session || "")} のセッション`, `取得 ${escapeHtml(fmtTime(us.generatedAt))}(米東部 ${escapeHtml(us.etAtRun || "")})`, table, "US CLOSE")}
+    ${mxSection("日本株への波及(関係の辺つき)", "前夜の米国の値動きを、関係する日本株ごとに", jpTable || '<p class="lab-foot">関係の辺がありません。</p>', "JP LINKS")}
+    <div class="read-box muted"><b>注意</b>${(us.notes || []).map((n) => `<p>${escapeHtml(n)}</p>`).join("")}</div>`;
+}
+
+function mxMarkets(m) {
+  const secs = m.markets || []; const keys = secs.flatMap((s) => s.items.map((it) => `mk:${it.sym}`));
+  const vix = mxAllItems()["mk:VIX/VIX3M"]; const read = vix?.available ? `<div class="read-box"><b>読み方</b><p>VIX ÷ VIX3M = ${mxNum(vix.last, 3)}。1を超えると「目先の不安が3か月先より大きい」逆転で、急落の最中に出やすい形。0.85 前後は平常の順イールド。</p><p>MOVE(米国債のボラ)が高いのに VIX が低いときは、金利の揺れが株にまだ波及していない状態。SKEW はテール(急落)保険の値段で、VIX と別に動く。</p></div>` : "";
+  return read + secs.map((s) => `${mxSection(escapeHtml(s.label), "カードを押すと5年の週足", `<div class="mx-grid">${s.items.map((it) => mxCard(it, `mk:${it.sym}`)).join("")}</div>`)}${mxDetailBlock(s.items.map((it) => `mk:${it.sym}`))}`).join("") + `<p class="lab-foot">出典: Yahoo Finance の日足(stockAI の価格取得・fetch_options --vol)、日経平均VI は日経公式。米国系列の最終日は取得時点の値で、引け値でないことがある。対象 ${keys.length} 系列。</p>`;
+}
+
+function mxCommod(m) {
+  const c = m.commodities || {}; const rep = c.fetchReport;
+  const failed = (rep?.series || []).filter((s) => !s.ok).map((s) => s.sym);
+  const head = rep ? `<p class="lab-foot">取得 ${escapeHtml(fmtTime(rep.fetchedAt))}${failed.length ? ` · ⚠ 取れなかった系列: ${escapeHtml(failed.join(", "))}` : ""}</p>` : '<div class="read-box muted"><b>コモディティの追加取得はまだ動いていません</b><p>朝のチェーンに scripts\\fetch_commodities.py を追加済み。それまでは既存の WTI・金・銅だけが表示されます(手動: python scripts\\fetch_commodities.py)。</p></div>';
+  return head + (c.groups || []).map((g) => `${mxSection(escapeHtml(g.label), "", `<div class="mx-grid">${g.items.map((it) => mxCard(it, `cm:${it.sym}`)).join("")}</div>`)}${mxDetailBlock(g.items.map((it) => `cm:${it.sym}`))}`).join("") + `<div class="read-box muted"><b>注意</b>${(c.notes || []).map((n) => `<p>${escapeHtml(n)}</p>`).join("")}</div>`;
+}
+
+function mxTrade(m) {
+  const t = m.trade; if (!t?.available) return `<div class="empty-state"><strong>貿易統計はまだ取得していません</strong><p>${escapeHtml(t?.howToFetch || "")}</p></div>`;
+  const flowL = { export: "輸出", import: "輸入" }; const f = macroState.tradeFlow; const blocks = t.blocks?.[f] || {};
+  const areas = Object.keys(t.areas).filter((a) => blocks[a]); if (!blocks[macroState.tradeArea]) macroState.tradeArea = "WORLD";
+  const rows = blocks[macroState.tradeArea] || []; const n = t.months.length - 1;
+  const ex = t.blocks?.export?.WORLD?.[0], im = t.blocks?.import?.WORLD?.[0];
+  const balVals = t.months.map((_, i) => (ex?.values?.[i] ?? null) !== null && (im?.values?.[i] ?? null) !== null ? ex.values[i] - im.values[i] : null);
+  const bars = (() => { const v = balVals.slice(-25); const mx = Math.max(...v.map((x) => Math.abs(x || 0))) || 1; const W = 900, H = 150, mid = 75; const bw = W / v.length; return `<svg class="mx-bars" viewBox="0 0 ${W} ${H + 18}" preserveAspectRatio="none"><line x1="0" x2="${W}" y1="${mid}" y2="${mid}" stroke="var(--line-strong)"/>${v.map((x, i) => { if (x === null) return ""; const h = Math.abs(x) / mx * (mid - 4); return `<rect x="${(i * bw + 2).toFixed(1)}" width="${(bw - 4).toFixed(1)}" y="${(x >= 0 ? mid - h : mid).toFixed(1)}" height="${h.toFixed(1)}" fill="${x >= 0 ? "var(--positive)" : "var(--negative)"}"><title>${t.months.slice(-25)[i]} 収支 ${mxOku(x)}</title></rect>`; }).join("")}${t.months.slice(-25).map((mo, i) => (i % 3 === 0 ? `<text x="${(i * bw + bw / 2).toFixed(1)}" y="${H + 14}" text-anchor="middle">${mo.slice(2)}</text>` : "")).join("")}</svg>`; })();
+  const top = `<div class="model-kpis mx-kpis"><article><span>輸出(世界・${escapeHtml(t.months[n])})</span><strong>${mxOku(ex?.values?.[n])}</strong><small>前年比 ${mxPct(ex?.yoy)} · 3か月 ${mxPct(ex?.yoy3m)}</small></article><article><span>輸入</span><strong>${mxOku(im?.values?.[n])}</strong><small>前年比 ${mxPct(im?.yoy)} · 3か月 ${mxPct(im?.yoy3m)}</small></article><article><span>貿易収支</span><strong class="${(balVals[n] ?? 0) >= 0 ? "positive-text" : "negative-text"}">${mxOku(balVals[n])}</strong><small>輸出−輸入</small></article><article><span>データ</span><strong>${t.months[0]}〜${t.months[n]}</strong><small>${escapeHtml(t.fetchReport?.note || "")}</small></article></div>`;
+  const focus = f === "export" ? /半導体等|自動車|鉄鋼|科学光学|電算機|原動機|非鉄金属|船舶/ : /原油|液化天然ガス|石炭|医薬品|半導体等|通信機|電算機|衣類|穀物/;
+  const table = `<div class="broker-table-wrap"><table class="broker-table mx-table left"><thead><tr><th>品目</th><th>${escapeHtml(t.months[n])}</th><th>前年同月比</th><th>3か月合計の前年比</th><th>3年の推移</th></tr></thead><tbody>${rows.map((r) => `<tr class="${r.code === "TOTAL" ? "mx-total" : focus.test(r.name) ? "mx-focus" : ""} ${macroState.tradeItem === r.name ? "mx-sel" : ""}" data-mx-item="${escapeHtml(r.name)}"><th>${escapeHtml(r.name)}<small> ${escapeHtml(r.code === "TOTAL" ? "" : r.code)}</small></th><td>${mxOku(r.values[n])}</td><td>${mxPct(r.yoy)}</td><td>${mxPct(r.yoy3m)}</td><td>${mxSpark(r.values, { w: 160, h: 30, color: "var(--primary)" })}</td></tr>`).join("")}</tbody></table></div><p class="lab-foot">行を押すと、その品目の地域別を下に出します。太字=注目品目(半導体・自動車・資源など)。</p>`;
+  let itemAreas = "";
+  if (macroState.tradeItem) {
+    const list = Object.keys(t.areas).filter((a) => blocks[a]).map((a) => [a, blocks[a].find((r) => r.name === macroState.tradeItem)]).filter(([, r]) => r);
+    itemAreas = `<section class="panel lab-section" id="mxItemAreas"><div class="section-title"><div><span>${escapeHtml(macroState.tradeItem)}(${flowL[f]})の地域別</span><small>地域別は各地域の上位20品目だけを持つので、出ない地域は「上位20に入っていない」</small></div></div><div class="broker-table-wrap"><table class="broker-table mx-table left"><thead><tr><th>地域</th><th>${escapeHtml(t.months[n])}</th><th>前年同月比</th><th>3か月の前年比</th><th>推移</th></tr></thead><tbody>${list.map(([a, r]) => `<tr><th>${escapeHtml(t.areas[a] || a)}</th><td>${mxOku(r.values[n])}</td><td>${mxPct(r.yoy)}</td><td>${mxPct(r.yoy3m)}</td><td>${mxSpark(r.values, { w: 160, h: 30, color: "var(--primary)" })}</td></tr>`).join("")}</tbody></table></div></section>`;
+  }
+  return `${top}${mxSection("貿易収支(世界・月次)", "緑=黒字 / 赤=赤字。棒に触れると値", bars, "BALANCE")}
+    ${mxSection("品目別", `${flowL[f]} · ${escapeHtml(t.areas[macroState.tradeArea] || "")} · 単位 億円`, `<div class="mx-ctrl"><div class="broker-seg">${Object.entries(flowL).map(([k, l]) => `<button type="button" data-mx-flow="${k}" class="${f === k ? "active" : ""}">${l}</button>`).join("")}</div><div class="broker-seg wide">${areas.map((a) => `<button type="button" data-mx-area="${a}" class="${macroState.tradeArea === a ? "active" : ""}">${escapeHtml(t.areas[a])}</button>`).join("")}</div></div>${table}`, "BY ITEM")}
+    ${itemAreas}
+    <div class="read-box muted"><b>注意</b>${(t.notes || []).map((x) => `<p>${escapeHtml(x)}</p>`).join("")}<p>出典: ${escapeHtml(t.source || "")}。取得 ${escapeHtml(fmtTime(t.fetchReport?.fetchedAt))}。</p></div>`;
+}
+
+function mxIip(m) {
+  const d = m.iip; if (!d?.available) return '<div class="empty-state"><strong>鉱工業生産のデータがありません</strong></div>';
+  const ageMonths = (() => { const [y, mo] = d.month.split("-").map(Number); const now = new Date(); return (now.getFullYear() - y) * 12 + (now.getMonth() + 1 - mo); })();
+  const warn = ageMonths > 3 ? `<div class="read-box muted"><b>⚠ データが古い</b><p>最新は ${escapeHtml(d.month)}(${ageMonths}か月前)。e-Stat の取得は手動(python scripts\\fetch_estat.py --fetch、ESTAT_APP_ID が要る)で、${escapeHtml(fmtTime(d.fetchedAt))} 以降更新していません。</p></div>` : "";
+  return warn + mxSection(`鉱工業生産(業種別・${escapeHtml(d.month)})`, `使える日 ${escapeHtml(d.availableFrom || "—")}(公表の遅れを保守的に見込んだ日)`, `<div class="broker-table-wrap"><table class="broker-table mx-table left"><thead><tr><th>東証業種</th><th>指数(2020=100)</th><th>前年同月比</th><th>全体との差</th><th>前年比の推移(24か月)</th></tr></thead><tbody>${(d.rows || []).map((r) => `<tr><th>${escapeHtml(r.sector)}<small> (${r.n}系列)</small></th><td>${mxNum(r.index, 1)}</td><td>${mxPct(r.yoy)}</td><td>${mxPct(r.rel)}</td><td>${mxSpark((d.series?.[r.sector] || []).map((p) => p[1]), { w: 160, h: 30, zero: true })}</td></tr>`).join("")}</tbody></table></div><p class="lab-foot">${escapeHtml(d.note || "")}</p>`, "IIP");
+}
+
+// 大型 = 売買代金の上位100(claude_ls/ls_screen.py の big と同じ定義。vol_rank は出来高順位なので使わない)
+function mxBig(rows) { const t = rows.map((r) => number(r.turnover, 0)).sort((x, y) => y - x); const cut = t[Math.min(99, t.length - 1)] ?? 0; return rows.filter((r) => number(r.turnover, 0) >= cut && number(r.turnover, 0) > 0); }
+function mxLs(m) {
+  const ls = m.lsScreen; if (!ls?.rows?.length) return '<div class="empty-state"><strong>強弱スクリーンの結果がありません</strong><p>python claude_ls\\ls_screen.py(予測のあとにチェーンで実行)</p></div>';
+  const big = mxBig(ls.rows);
+  const pool = ls.rows.filter((r) => number(r.turnover, 0) >= 1e9 && number(r.close, 0) >= 100);
+  const by = (a) => [...a].sort((x, y) => y.score - x.score);
+  const views = { bigLong: ["大型(売買代金上位100)の強い側 上位15", by(big).slice(0, 15), "大型 強い"], bigShort: ["大型(売買代金上位100)の弱い側 下位15", by(big).slice(-15).reverse(), "大型 弱い"], poolLong: ["母集団(売買代金10億円以上・株価100円以上)の強い側 上位15", by(pool).slice(0, 15), "母集団 強い"], poolShort: ["母集団の弱い側 下位15", by(pool).slice(-15).reverse(), "母集団 弱い"], all: [`全銘柄(スコア順・${ls.rows.length})`, by(ls.rows), "全銘柄"] };
+  const [title, rows] = views[macroState.lsView] || views.bigLong;
+  const yes = (v) => (v === true || v === "True" ? "●" : "");
+  const table = `<div class="broker-table-wrap"><table class="broker-table mx-table"><thead><tr><th>銘柄</th><th>業種</th><th>終値</th><th>5日</th><th>対日経20日</th><th>高値から</th><th>押し(ATR)</th><th>日経安日の超過</th><th>ライン反発</th><th>20日安値割れ</th><th>60日高値更新</th><th>高値届かず</th><th>対米20日差</th><th>信用倍率</th><th>売り残4週</th><th>AI20日</th><th>スコア</th></tr></thead><tbody>${rows.map((r) => `<tr class="${r.squeeze_risk === true || r.squeeze_risk === "True" ? "warn-row" : ""}"><th><button type="button" class="link-button" data-mx-stock="${escapeHtml(r.code)}">${escapeHtml(r.code)}</button> ${escapeHtml(r.name)}</th><td><small>${escapeHtml(r.industry || "")}</small></td><td>${mxNum(r.close, 0)}</td><td>${mxPct(r.ret5)}</td><td>${mxPct(r.ex20)}</td><td>${mxPct(r.dd_pct)}</td><td>${mxNum(r.dd_atr, 1)}</td><td>${mxPct(r.ex_down, 2)}</td><td>${r.touches ?? "—"}</td><td>${yes(r.broke20)}</td><td>${yes(r.new_high)}</td><td>${yes(r.fail_high)}</td><td>${r.us_gap20 == null ? "" : mxPct(r.us_gap20)}</td><td>${r.shinyo_ratio == null ? "—" : mxNum(r.shinyo_ratio, 2)}</td><td>${r.shinyo_sell_chg4w == null ? "—" : mxPct(r.shinyo_sell_chg4w, 0)}</td><td>${mxPct(r.ai20_ret)}</td><td><b>${mxNum(r.score, 2)}</b></td></tr>`).join("")}</tbody></table></div><p class="lab-foot">赤い行=売り残の急増などで踏み上げ注意(squeeze_risk)。銘柄コードを押すと個別銘柄ページ。</p>`;
+  return `<div class="lab-grid even">${mxSection("市場", `基準日 ${escapeHtml(ls.asof)}`, `<ul class="mx-list">${(ls.market || []).map((x) => `<li>${escapeHtml(x)}</li>`).join("")}</ul>`, "MARKET")}${mxSection("業種の強弱(20日騰落)", "stockAI ユニバース", `<ul class="mx-list">${(ls.sectors || []).map((x) => `<li>${escapeHtml(x)}</li>`).join("")}</ul>`, "SECTOR")}</div>
+    ${mxSection(escapeHtml(title), `${rows.length}銘柄 · 出力 ${escapeHtml(fmtTime(ls.generatedAt))}`, `<div class="mx-ctrl"><div class="broker-seg wide">${Object.entries(views).map(([k, v]) => `<button type="button" data-mx-ls="${k}" class="${macroState.lsView === k ? "active" : ""}">${escapeHtml(v[2])}</button>`).join("")}</div></div>${table}`, "SCREEN")}
+    <div class="read-box muted"><b>判定の材料(本人の強弱の基準を機械計算したもの)</b>${(ls.method || []).map((x) => `<p>・${escapeHtml(x)}</p>`).join("")}<p><b>${escapeHtml(ls.caution || "")}</b></p></div>`;
+}
+
+function mxReports(m) {
+  const reps = m.reports || []; if (!reps.length) return '<div class="empty-state"><strong>Claude のレポートはまだありません</strong><p>claude_ls/out/report_*.md(定期タスクの引け後レポート)と macro_*.md を表示します。</p></div>';
+  const i = Math.min(macroState.reportIdx, reps.length - 1); const r = reps[i];
+  const lines = r.md.split(/\r?\n/); const title = /^# /.test(lines[0] || "") ? lines.shift().replace(/^# /, "") : r.file;
+  return `<div class="mx-ctrl"><div class="broker-seg wide">${reps.map((x, k) => `<button type="button" data-mx-report="${k}" class="${k === i ? "active" : ""}">${escapeHtml((x.kind === "report" ? "レポート " : "マクロ ") + x.date)}</button>`).join("")}</div></div>
+    <section class="panel lab-section mx-report"><div class="section-title"><div><span>${escapeHtml(title)}</span><small>${escapeHtml(r.file)} · 更新 ${escapeHtml(fmtTime(r.mtime))}</small></div><em>${r.kind === "report" ? "REPORT" : "MACRO"}</em></div>${mdToHtml(lines.join("\n"))}</section>
+    <p class="lab-foot">Claude の定期タスクと stockAI のデータで作った文章で、投資助言ではありません。数値の出典は本文の出典欄を見てください。</p>`;
 }
 
 
