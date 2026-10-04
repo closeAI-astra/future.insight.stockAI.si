@@ -1102,3 +1102,6 @@ html[data-fs-theme="earth"] .sidebar,html[data-fs-theme="earth"] .topbar { backg
 .ec-node-t{fill:var(--text);font:700 11.5px Inter,sans-serif}.ec-node-s{fill:var(--muted);font:10px Inter,sans-serif}
 .ec-path{line-height:2}
 @media(max-width:760px){.ec-learn{grid-template-columns:1fr}}
+
+/* 2026-10-04c Claude レポートの選択 */
+.mx-select{width:100%;max-width:420px}

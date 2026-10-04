@@ -3381,6 +3381,7 @@ function renderMacroPage() {
   body.querySelectorAll("[data-mx-item]").forEach((el) => el.addEventListener("click", () => { macroState.tradeItem = macroState.tradeItem === el.dataset.mxItem ? null : el.dataset.mxItem; renderMacroPage(); $("#mxItemAreas")?.scrollIntoView({ behavior: "smooth", block: "nearest" }); }));
   body.querySelectorAll("[data-mx-ls]").forEach((el) => el.addEventListener("click", () => { macroState.lsView = el.dataset.mxLs; renderMacroPage(); }));
   body.querySelectorAll("[data-mx-report]").forEach((el) => el.addEventListener("click", () => { macroState.reportIdx = Number(el.dataset.mxReport); renderMacroPage(); }));
+  body.querySelectorAll("[data-mx-report-sel]").forEach((el) => el.addEventListener("change", () => { macroState.reportIdx = Number(el.value); renderMacroPage(); }));
   bindEcon(body);
   const det = $("#mxDetail"); if (det) bindMxDetail(det);
 }
@@ -3489,12 +3490,30 @@ function mxLs(m) {
     <div class="read-box muted"><b>判定の材料(本人の強弱の基準を機械計算したもの)</b>${(ls.method || []).map((x) => `<p>・${escapeHtml(x)}</p>`).join("")}<p><b>${escapeHtml(ls.caution || "")}</b></p></div>`;
 }
 
+function mxBook(bk) {
+  if (!bk) return mxSection("Claude の独自ブック(仮想売買の履歴)", "claude_ls/out/claude_book.csv", '<p class="lab-foot">まだ記録がありません。朝の定期タスクが建てた仮想ポジションと、その結果がここに並びます。</p>', "BOOK");
+  if (bk.error) return mxSection("Claude の独自ブック(仮想売買の履歴)", bk.file || "", `<p class="lab-foot">読み込めませんでした: ${escapeHtml(bk.error)}</p>`, "BOOK");
+  const s = bk.stats || {}; const pct = (v) => (v == null ? "—" : `${(v * 100).toFixed(0)}%`); const f2 = (v) => (v == null ? "—" : Number(v).toFixed(2));
+  const cols = [["opened_date", "建てた日"], ["side", "売買"], ["code", "コード"], ["name", "銘柄"], ["ref_price", "参照価格"], ["horizon_days", "期間"], ["status", "状態"], ["closed_date", "閉じた日"], ["ret", "損益%"], ["ret_vs_nikkei", "対日経%"], ["thesis", "根拠"], ["invalidation", "撤退条件"]];
+  const rows = [...(bk.rows || [])].reverse();
+  const cls = (v) => { const x = Number(v); return v === "" || v == null || !Number.isFinite(x) ? "" : x > 0 ? "positive" : x < 0 ? "negative" : ""; };
+  const table = `<div class="broker-table-wrap"><table class="broker-table mx-table left"><thead><tr>${cols.map(([, l]) => `<th>${l}</th>`).join("")}</tr></thead><tbody>${rows.map((r) => `<tr>${cols.map(([k]) => `<td class="${k === "ret" || k === "ret_vs_nikkei" ? cls(r[k]) : ""}">${escapeHtml(String(r[k] ?? ""))}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`;
+  const sum = `<p class="mx-report">保有中 ${s.open ?? 0} 件 · 決済済み ${s.closed ?? 0} 件 · 勝率 ${pct(s.winRate)} · 平均損益 ${f2(s.avgRet)}% · 平均の対日経 ${f2(s.avgExcess)}% · PF ${f2(s.pf)}</p>`;
+  return mxSection("Claude の独自ブック(仮想売買の履歴)", `${bk.file} · 更新 ${fmtTime(bk.mtime)}`, sum + table + `<p class="lab-foot">${escapeHtml(bk.note || "")}</p>`, "BOOK");
+}
+
 function mxReports(m) {
-  const reps = m.reports || []; if (!reps.length) return '<div class="empty-state"><strong>Claude のレポートはまだありません</strong><p>claude_ls/out/report_*.md(定期タスクの引け後レポート)と macro_*.md を表示します。</p></div>';
+  const reps = m.reports || []; if (!reps.length) return '<div class="empty-state"><strong>Claude のレポートはまだありません</strong><p>claude_ls/out/report_*.md(定期タスクの朝・引け後レポート)と macro_*.md を表示します。</p></div>' + mxBook(m.claudeBook);
   const i = Math.min(macroState.reportIdx, reps.length - 1); const r = reps[i];
   const lines = r.md.split(/\r?\n/); const title = /^# /.test(lines[0] || "") ? lines.shift().replace(/^# /, "") : r.file;
-  return `<div class="mx-ctrl"><div class="broker-seg wide">${reps.map((x, k) => `<button type="button" data-mx-report="${k}" class="${k === i ? "active" : ""}">${escapeHtml((x.kind === "report" ? "レポート " : "マクロ ") + x.date)}</button>`).join("")}</div></div>
-    <section class="panel lab-section mx-report"><div class="section-title"><div><span>${escapeHtml(title)}</span><small>${escapeHtml(r.file)} · 更新 ${escapeHtml(fmtTime(r.mtime))}</small></div><em>${r.kind === "report" ? "REPORT" : "MACRO"}</em></div>${mdToHtml(lines.join("\n"))}</section>
+  const label = (x) => (x.kind === "strategy" ? "戦略(Kohki式の正本)" : x.kind === "report" ? `レポート ${x.date.replace(/_am$/, " 朝").replace(/_pm$/, " 引け後")}` : `マクロ ${x.date}`);
+  const tag = r.kind === "strategy" ? "STRATEGY" : r.kind === "report" ? "REPORT" : "MACRO";
+  const ctrl = reps.length > 8
+    ? `<div class="mx-ctrl"><select class="mx-select" data-mx-report-sel aria-label="レポートを選ぶ">${reps.map((x, k) => `<option value="${k}" ${k === i ? "selected" : ""}>${escapeHtml(label(x))}</option>`).join("")}</select></div>`
+    : `<div class="mx-ctrl"><div class="broker-seg wide">${reps.map((x, k) => `<button type="button" data-mx-report="${k}" class="${k === i ? "active" : ""}">${escapeHtml(label(x))}</button>`).join("")}</div></div>`;
+  return `${ctrl}
+    <section class="panel lab-section mx-report"><div class="section-title"><div><span>${escapeHtml(title)}</span><small>${escapeHtml(r.file)} · 更新 ${escapeHtml(fmtTime(r.mtime))}</small></div><em>${tag}</em></div>${mdToHtml(lines.join("\n"))}</section>
+    ${mxBook(m.claudeBook)}
     <p class="lab-foot">Claude の定期タスクと stockAI のデータで作った文章で、投資助言ではありません。数値の出典は本文の出典欄を見てください。</p>`;
 }
 
