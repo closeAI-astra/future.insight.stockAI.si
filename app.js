@@ -3267,7 +3267,7 @@ function ecCard(it) {
 function ecDetail(e, it) {
   if (!it) return "";
   const fc = it.forecast; const ll = it.leadLag; const rel = it.lastRelease;
-  const src = it.source === "fred" ? `FRED ${escapeHtml(it.key)}` : it.source === "yahoo" ? `Yahoo ${escapeHtml(it.key)}` : "Claude が Web で拾った発表";
+  const src = it.source === "fred" ? `FRED ${escapeHtml(it.key)}` : it.source === "yahoo" ? `Yahoo ${escapeHtml(it.key)}` : it.source === "stock_rank" ? "JPX(stock_rank が取得・共有)" : "Claude が Web で拾った発表";
   const node = (e.links?.nodes || []).find((n) => n.id === it.node);
   const box = (t, v) => v ? `<div><b>${t}</b><p>${escapeHtml(v)}</p></div>` : "";
   const llTable = ll?.top?.length ? `<div class="broker-table-wrap"><table class="broker-table mx-table left"><thead><tr><th>翌月の超過リターン(業種−TOPIX)</th><th>相関</th><th>n(月)</th><th>t値</th></tr></thead><tbody>${ll.top.map((x) => `<tr><th>${escapeHtml(x.sector)}</th><td class="${number(x.r) >= 0 ? "positive-text" : "negative-text"}">${mxNum(x.r, 2)}</td><td>${x.n}</td><td>${mxNum(x.t, 2)}</td></tr>`).join("")}${ll.nt ? `<tr><th>参考: 日経−TOPIX(NT)</th><td>${mxNum(ll.nt.r, 2)}</td><td>${ll.nt.n}</td><td>—</td></tr>` : ""}</tbody></table></div><p class="lab-foot">指標の月次の変化を公表の遅れ(${it.lagDays ?? 0}日)だけずらして「知り得た月」に置き、その翌月の業種別超過リターン(stockAI の銘柄の等ウェイト−TOPIX)との相関。${ll.nSectors}業種の中の上位なので、|t|が2前後でも偶然の可能性が高い(未検定・多重比較)。</p>` : '<p class="lab-foot">相関を測るには履歴(24か月以上)と stockAI の価格が要ります。</p>';
